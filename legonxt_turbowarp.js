@@ -518,6 +518,11 @@
             await this.writeScreen(pixels);
         }
 
+        async updateDisplay() {
+            // Write the current screen buffer to the NXT
+            await this.writeScreen(this.screenBuffer);
+        }
+
         async drawPixel(x, y, on = true) {
             x = Math.floor(Cast.toNumber(x));
             y = Math.floor(Cast.toNumber(y));
