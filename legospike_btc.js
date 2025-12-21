@@ -109,56 +109,62 @@
         // ==================== CONNECTION ====================
         
         _forceUserGesture(callback) {
-            const btn = document.createElement('button');
-            btn.innerText = 'Click to Confirm Serial Connection';
-            btn.style.position = 'fixed';
-            btn.style.top = '50%';
-            btn.style.left = '50%';
-            btn.style.transform = 'translate(-50%, -50%)';
-            btn.style.zIndex = '999999';
-            btn.style.padding = '20px';
-            btn.style.fontSize = '20px';
-            btn.style.backgroundColor = '#FFD700';
-            btn.style.border = '2px solid black';
-            btn.style.borderRadius = '10px';
-            btn.style.cursor = 'pointer';
+            // Remove any existing buttons first
+            const existing = document.getElementById('serial-fix-btn');
+            if (existing) existing.remove();
 
-            btn.onclick = async () => {
-                document.body.removeChild(btn);
+            const btn = document.createElement('button');
+            btn.id = 'serial-fix-btn';
+            btn.innerText = 'CLICK HERE TO SELECT SPIKE HUB';
+            // High-visibility styling
+            Object.assign(btn.style, {
+                position: 'fixed', top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)', zIndex: '999999',
+                padding: '30px', fontSize: '24px', fontWeight: 'bold',
+                backgroundColor: '#FFD700', color: 'black',
+                border: '5px solid black', borderRadius: '15px',
+                cursor: 'pointer', boxShadow: '0 0 20px rgba(0,0,0,0.5)'
+            });
+
+            btn.onclick = async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Crucial: Focus the window before requesting port
+                window.focus(); 
+                
                 try {
                     await callback();
-                } catch (e) {
-                    alert(e.message);
+                    btn.remove(); // Only remove on success
+                } catch (err) {
+                    console.error("Inner Error:", err);
+                    // If it still says "No port selected", it means the flag is definitely NOT working
+                    if (err.name === 'SecurityError') {
+                        alert("SECURITY ERROR: The --enable-unsafe-webserial flag is NOT active.");
+                    } else {
+                        alert("Connection Error: " + err.message);
+                    }
+                    btn.remove();
                 }
             };
             document.body.appendChild(btn);
         }
 
         async connectHub() {
-            console.log('🔌 [SPIKE Prime BTC] Connect requested');
-
+            console.log('🔍 Checking Web Serial availability...');
+            console.log('navigator.serial exists?', !!navigator.serial);
+    
             if (!navigator.serial) {
-                alert('Web Serial API not supported! Check your flags.');
+                alert("Web Serial not found. Run TurboWarp with the --enable-unsafe-webserial flag.");
                 return;
             }
 
-            try {
-                // FIX: This MUST be the first await. 
-                // Do not put any logic, sleep, or other awaits above this line.
+            this._forceUserGesture(async () => {
+                // We call this directly in the click handler
+                // The browser allows 1 requestPort per user gesture
                 const port = await navigator.serial.requestPort();
-                
-                // Once the user selects the port, then we assign it to the class
                 this.port = port;
                 
-                console.log('✅ [SPIKE Prime BTC] Port selected');
-                
-                await this.port.open({ 
-                    baudRate: 115200,
-                    dataBits: 8,
-                    stopBits: 1,
-                    parity: 'none',
-                    flowControl: 'none'
-                });
+                await this.port.open({ baudRate: 115200 });
                 
                 this.reader = this.port.readable.getReader();
                 this.writer = this.port.writable.getWriter();
@@ -166,16 +172,8 @@
                 
                 this.startReadLoop();
                 await this._initializeHub();
-                
-                alert('✅ Connected to SPIKE Prime!');
-
-            } catch (error) {
-                // This catch now handles the "User cancelled" (NotFoundError) 
-                // and the "No gesture" (SecurityError)
-                console.error('❌ [SPIKE Prime BTC] Connection error:', error);
-                alert('Connection failed: ' + error.message);
-                this.reset();
-            }
+                console.log("✅ Serial Connection Established");
+            });
         }
 
         async disconnectHub() {
