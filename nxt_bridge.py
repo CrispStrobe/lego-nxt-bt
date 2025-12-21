@@ -59,16 +59,19 @@ except Exception as e:
     sys.exit(1)
 
 async def relay_handler(websocket):
-    client_ip = websocket.remote_address[0]
-    print(f"📱 Client connected from {client_ip}")
+    print(f"📱 Client connected from {websocket.remote_address[0]}")
     
     # Task to handle data coming FROM the NXT to the client
     async def nxt_to_client():
         while True:
-            if ser and ser.in_waiting > 0:
-                data = ser.read(ser.in_waiting)
-                b64_data = base64.b64encode(data).decode('utf-8')
-                await websocket.send(b64_data)
+            try:
+                if ser and ser.in_waiting > 0:
+                    data = ser.read(ser.in_waiting)
+                    b64_data = base64.b64encode(data).decode('utf-8')
+                    await websocket.send(b64_data)
+            except Exception as e:
+                print(f"⚠️ NXT read error: {e}")
+                break
             await asyncio.sleep(0.01)
     
     nxt_task = asyncio.create_task(nxt_to_client())
@@ -76,11 +79,23 @@ async def relay_handler(websocket):
     try:
         # Handle data coming FROM the client to the NXT
         async for message in websocket:
-            raw_telegram = base64.b64decode(message)
-            if ser:
-                ser.write(raw_telegram)
+            try:
+                raw_telegram = base64.b64decode(message)
+                if ser:
+                    # ✅ Added try/except for serial write
+                    try:
+                        ser.write(raw_telegram)
+                    except serial.SerialException as e:
+                        print(f"⚠️ Serial write error: {e}")
+                        # Try to recover
+                        await asyncio.sleep(0.01)
+                    except Exception as e:
+                        print(f"❌ Unexpected serial error: {e}")
+            except Exception as e:
+                print(f"❌ Message handling error: {e}")
+                
     except websockets.exceptions.ConnectionClosed:
-        print(f"📴 Client {client_ip} disconnected")
+        print(f"📴 Client disconnected")
     finally:
         nxt_task.cancel()
 

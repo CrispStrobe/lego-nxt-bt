@@ -525,7 +525,7 @@
             if (x < 0 || x >= 100 || y < 0 || y >= 64) return;
             
             this.screenBuffer[y][x] = on ? 1 : 0;
-            await this.writeScreen(this.screenBuffer);
+            // ❌ REMOVED: await this.writeScreen(this.screenBuffer);
         }
 
         async drawLine(x1, y1, x2, y2, on = true) {
@@ -557,8 +557,7 @@
                     y1 += sy;
                 }
             }
-
-            await this.writeScreen(this.screenBuffer);
+            // ❌ REMOVED: await this.writeScreen(this.screenBuffer);
         }
 
         async drawRect(x, y, w, h, filled = false, on = true) {
@@ -578,14 +577,12 @@
                     }
                 }
             } else {
-                // Top & bottom
                 for (let dx = 0; dx < w; dx++) {
                     if (x + dx >= 0 && x + dx < 100) {
                         if (y >= 0 && y < 64) this.screenBuffer[y][x + dx] = on ? 1 : 0;
                         if (y + h - 1 >= 0 && y + h - 1 < 64) this.screenBuffer[y + h - 1][x + dx] = on ? 1 : 0;
                     }
                 }
-                // Left & right
                 for (let dy = 0; dy < h; dy++) {
                     if (y + dy >= 0 && y + dy < 64) {
                         if (x >= 0 && x < 100) this.screenBuffer[y + dy][x] = on ? 1 : 0;
@@ -593,8 +590,7 @@
                     }
                 }
             }
-
-            await this.writeScreen(this.screenBuffer);
+            // ❌ REMOVED: await this.writeScreen(this.screenBuffer);
         }
 
         async drawText(text, x, y, on = true) {
@@ -620,11 +616,10 @@
                     }
                 }
                 
-                cursorX += 6; // 5 pixels + 1 space
+                cursorX += 6;
                 if (cursorX >= 100) break;
             }
-
-            await this.writeScreen(this.screenBuffer);
+            // ❌ REMOVED: await this.writeScreen(this.screenBuffer);
         }
 
         async drawPattern(pattern) {
@@ -931,6 +926,11 @@
                         text: 'clear screen'
                     },
                     {
+                        opcode: 'updateDisplay',
+                        blockType: Scratch.BlockType.COMMAND,
+                        text: '🖥️ update display'
+                    },
+                    {
                         opcode: 'drawText',
                         blockType: Scratch.BlockType.COMMAND,
                         text: 'draw text [TEXT] at x:[X] y:[Y]',
@@ -1055,6 +1055,9 @@
         // Screen
         captureScreen() { return this.nxt.readScreen(); }
         clearScreen() { return this.nxt.clearScreen(); }
+        updateDisplay() { 
+            return this.nxt.updateDisplay(); 
+        }
         drawText(args) { return this.nxt.drawText(args.TEXT, args.X, args.Y); }
         drawPixel(args) { return this.nxt.drawPixel(args.X, args.Y, args.STATE === 'on'); }
         drawLine(args) { return this.nxt.drawLine(args.X1, args.Y1, args.X2, args.Y2); }
