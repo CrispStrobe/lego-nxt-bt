@@ -1,39 +1,17 @@
 import asyncio
 import websockets
 import serial
-import serial.tools.list_ports
 import base64
 import sys
-import os
+import time
 from datetime import datetime
 
-# --- CONFIGURATION ---
 LISTEN_PORT = 8080
-NXT_COM_PORT = None  # Auto-detect
+NXT_COM_PORT = "/dev/cu.NXT"
 DEBUG = True
-LOG_TO_FILE = False
 
-# ✅ Initialize ANSI colors for Windows
-def init_colors():
-    if sys.platform == "win32":
-        try:
-            os.system('color')
-            return True
-        except:
-            return False
-    return True
+stats = {'to_nxt': 0, 'from_nxt': 0, 'errors': 0, 'start_time': None}
 
-USE_COLORS = init_colors()
-
-# Packet statistics
-stats = {
-    'to_nxt': 0,
-    'from_nxt': 0,
-    'errors': 0,
-    'start_time': None
-}
-
-# Opcode lookup
 OPCODE_NAMES = {
     0x00: 'DIRECT_CMD', 0x80: 'DIRECT_CMD_NO_REPLY', 0x01: 'SYSTEM_CMD',
     0x02: 'REPLY', 0x03: 'PLAY_TONE', 0x04: 'SET_OUT_STATE', 0x05: 'SET_IN_MODE',
@@ -43,14 +21,12 @@ OPCODE_NAMES = {
 }
 
 def log_packet(direction, data, description=""):
-    """Log packet with timestamp and hex dump"""
     if not DEBUG:
         return
     
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
     hex_str = data.hex().upper()
     
-    # Parse packet structure
     details = ""
     if len(data) >= 2:
         length = data[0] | (data[1] << 8)
@@ -63,29 +39,14 @@ def log_packet(direction, data, description=""):
             op_name = OPCODE_NAMES.get(opcode, f"0x{opcode:02X}")
             details += f" [{cmd_name} → {op_name}]"
     
-    # Colors
-    if USE_COLORS:
-        COLORS = {'TO': '\033[94m', 'FROM': '\033[92m', 'ERROR': '\033[91m', 'RESET': '\033[0m'}
-    else:
-        COLORS = {'TO': '', 'FROM': '', 'ERROR': '', 'RESET': ''}
-    
-    if direction == "TO_NXT":
-        arrow = "➡️" if USE_COLORS else "=>"
-        color = COLORS['TO']
-        # ✅ Stats incremented in relay_handler, not here
-    else:
-        arrow = "⬅️" if USE_COLORS else "<="
-        color = COLORS['FROM']
+    arrow = "➡️" if direction == "TO_NXT" else "⬅️"
+    color = '\033[94m' if direction == "TO_NXT" else '\033[92m'
     
     log_line = f"[{timestamp}] {arrow} {direction}: {hex_str}{details}"
     if description:
         log_line += f" | {description}"
     
-    print(f"{color}{log_line}{COLORS['RESET']}")
-    
-    if LOG_TO_FILE:
-        with open('nxt_bridge_log.txt', 'a') as f:
-            f.write(f"{log_line}\n")
+    print(f"{color}{log_line}\033[0m")
 
 def print_stats():
     if not DEBUG or stats['start_time'] is None:
@@ -100,53 +61,73 @@ def print_stats():
     if elapsed > 0:
         print(f"   Rate: {(stats['to_nxt'] + stats['from_nxt']) / elapsed:.1f} packets/sec")
 
-print(f"🚀 Initializing NXT WebSocket Bridge...")
+print("🚀 NXT WebSocket Bridge (Polling Mode)")
 if DEBUG:
-    print("🔍 DEBUG MODE ENABLED - Packet traffic will be logged")
-    if LOG_TO_FILE:
-        print("📝 Logging to file: nxt_bridge_log.txt")
-    if not USE_COLORS:
-        print("⚠️  ANSI colors disabled (unsupported terminal)")
+    print("🔍 DEBUG MODE ENABLED\n")
 
-def find_nxt_port():
-    ports = serial.tools.list_ports.comports()
-    nxt_keywords = ['bluetooth', 'rfcomm', 'nxt', 'serial']
-    
-    for port in ports:
-        port_name = port.device.lower()
-        port_desc = (port.description or '').lower()
-        
-        for keyword in nxt_keywords:
-            if keyword in port_name or keyword in port_desc:
-                print(f"🔍 Found potential NXT port: {port.device} - {port.description}")
-                return port.device
-    
-    return None
-
-NXT_COM_PORT = find_nxt_port()
-
-if not NXT_COM_PORT:
-    print("\n❌ Could not auto-detect NXT port!")
-    print("\n📋 Available ports:")
-    for port in serial.tools.list_ports.comports():
-        print(f"   {port.device} - {port.description}")
-    
-    user_input = input("\n🔧 Enter COM port manually (or press Enter to quit): ").strip()
-    if user_input:
-        NXT_COM_PORT = user_input
-    else:
-        sys.exit(1)
-
+# Open serial with SHORT timeout (we'll poll instead of blocking)
 try:
     ser = serial.Serial(NXT_COM_PORT, baudrate=115200, timeout=0.1)
     print(f"✅ Connected to NXT on {NXT_COM_PORT}")
 except Exception as e:
     print(f"❌ Failed to open {NXT_COM_PORT}: {e}")
-    print("\n💡 Make sure:")
-    print("   1. NXT is paired via Bluetooth in Windows/macOS settings")
-    print("   2. No other app is using the port")
-    print("   3. The port exists in Device Manager")
     sys.exit(1)
+
+
+def read_nxt_packet_polling():
+    """
+    ✅ FIXED: Poll for data instead of blocking read
+    This matches the diagnostic script that works!
+    """
+    try:
+        # Poll for up to 5 seconds (NXT can be slow!)
+        start_time = time.time()
+        timeout = 5.0
+        
+        # Wait for at least 2 bytes (header)
+        while time.time() - start_time < timeout:
+            if ser.in_waiting >= 2:
+                break
+            time.sleep(0.01)  # 10ms poll interval
+        
+        # Check if we got header
+        if ser.in_waiting < 2:
+            return None  # Timeout, no data
+        
+        # Read header
+        header = ser.read(2)
+        if len(header) < 2:
+            return None
+        
+        length = header[0] | (header[1] << 8)
+        
+        if length > 256 or length == 0:
+            if DEBUG:
+                print(f"⚠️ Invalid length: {length}")
+            return None
+        
+        # Now wait for the data payload
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if ser.in_waiting >= length:
+                break
+            time.sleep(0.01)
+        
+        # Read data
+        data = ser.read(length)
+        
+        if len(data) < length:
+            if DEBUG:
+                print(f"⚠️ Incomplete: got {len(data)}/{length}")
+            return None
+        
+        return header + data
+        
+    except Exception as e:
+        if DEBUG:
+            print(f"⚠️ Read error: {e}")
+        return None
+
 
 async def relay_handler(websocket):
     client_ip = websocket.remote_address[0]
@@ -155,74 +136,68 @@ async def relay_handler(websocket):
     if stats['start_time'] is None:
         stats['start_time'] = datetime.now()
     
-    # ✅ CORRECTED: Zero-Logic Relay - No buffering!
+    # Read from NXT
     async def nxt_to_client():
+        """Continuously poll for NXT packets"""
         while True:
             try:
-                if ser and ser.in_waiting > 0:
-                    # Read whatever is currently in the OS serial buffer
-                    chunk = ser.read(ser.in_waiting)
+                # Run polling read in executor (non-blocking)
+                packet = await asyncio.get_event_loop().run_in_executor(
+                    None, read_nxt_packet_polling
+                )
+                
+                if packet:
+                    log_packet("FROM_NXT", packet)
+                    stats['from_nxt'] += 1
                     
-                    if chunk:  # ✅ Only process if we got data
-                        log_packet("FROM_NXT", chunk)
-                        stats['from_nxt'] += 1
-                        
-                        # Send immediately - iPad's handleIncomingData() 
-                        # will reassemble chunks into complete Telegrams
-                        b64_data = base64.b64encode(chunk).decode('utf-8')
-                        await websocket.send(b64_data)
-                        
+                    b64_data = base64.b64encode(packet).decode('utf-8')
+                    await websocket.send(b64_data)
+                else:
+                    # No packet, brief sleep
+                    await asyncio.sleep(0.05)
+                    
             except Exception as e:
                 stats['errors'] += 1
                 if DEBUG:
-                    print(f"⚠️ NXT read error: {e}")
+                    print(f"⚠️ Reader error: {e}")
                 break
-            
-            # ✅ 5ms poll for responsive sensor data
-            await asyncio.sleep(0.005)
     
-    nxt_task = asyncio.create_task(nxt_to_client())
+    reader_task = asyncio.create_task(nxt_to_client())
     
     try:
         async for message in websocket:
             try:
                 raw_telegram = base64.b64decode(message)
                 
-                # Skip empty messages
                 if len(raw_telegram) == 0:
                     continue
                 
                 log_packet("TO_NXT", raw_telegram)
                 stats['to_nxt'] += 1
                 
-                if ser:
-                    # ✅ Protected write with retry and flush
-                    retry_count = 0
-                    max_retries = 3
-                    
-                    while retry_count < max_retries:
-                        try:
-                            ser.write(raw_telegram)
-                            ser.flush()  # ✅ Ensure transmission
-                            break
-                            
-                        except serial.SerialException as e:
-                            retry_count += 1
-                            stats['errors'] += 1
+                # Write to NXT
+                retry_count = 0
+                max_retries = 3
+                
+                while retry_count < max_retries:
+                    try:
+                        ser.write(raw_telegram)
+                        ser.flush()
+                        break
+                        
+                    except Exception as e:
+                        retry_count += 1
+                        stats['errors'] += 1
+                        if DEBUG:
+                            print(f"⚠️ Write error (attempt {retry_count}/{max_retries}): {e}")
+                        
+                        if retry_count < max_retries:
+                            await asyncio.sleep(0.02)
+                        else:
                             if DEBUG:
-                                print(f"⚠️ Serial write error (attempt {retry_count}/{max_retries}): {e}")
-                            if retry_count < max_retries:
-                                await asyncio.sleep(0.02)
-                            else:
-                                if DEBUG:
-                                    print(f"❌ Serial write failed after {max_retries} attempts")
-                                    
-                        except Exception as e:
-                            stats['errors'] += 1
-                            if DEBUG:
-                                print(f"❌ Unexpected serial error: {e}")
+                                print(f"❌ Write failed after {max_retries} attempts")
                             break
-                            
+                        
             except Exception as e:
                 stats['errors'] += 1
                 if DEBUG:
@@ -233,34 +208,30 @@ async def relay_handler(websocket):
         if DEBUG:
             print_stats()
     finally:
-        nxt_task.cancel()
+        reader_task.cancel()
+
 
 async def main():
     async with websockets.serve(relay_handler, "0.0.0.0", LISTEN_PORT):
-        local_ip = get_local_ip()
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(('8.8.8.8', 1))
+            local_ip = s.getsockname()[0]
+        except:
+            local_ip = '127.0.0.1'
+        finally:
+            s.close()
+        
         print(f"\n🎉 Bridge running!")
         print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print(f"📡 WebSocket Server: ws://{local_ip}:{LISTEN_PORT}")
-        print(f"🔗 Local connection:  ws://localhost:{LISTEN_PORT}")
+        print(f"📡 WebSocket: ws://{local_ip}:{LISTEN_PORT}")
+        print(f"🔗 Local: ws://localhost:{LISTEN_PORT}")
         print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print(f"\n💡 In TurboWarp/Scratch:")
-        print(f"   Use block: connect to [{local_ip}:{LISTEN_PORT}]")
-        print(f"\n📱 For iPad/Phone on same WiFi:")
-        print(f"   Use: {local_ip}:{LISTEN_PORT}")
-        print(f"\n⌨️  Press Ctrl+C to stop\n")
+        print(f"\n💡 In TurboWarp: connect to [{local_ip}:{LISTEN_PORT}]")
+        print(f"⌨️  Press Ctrl+C to stop\n")
         await asyncio.get_running_loop().create_future()
 
-def get_local_ip():
-    import socket
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(('8.8.8.8', 1))
-        IP = s.getsockname()[0]
-    except Exception:
-        IP = '127.0.0.1'
-    finally:
-        s.close()
-    return IP
 
 if __name__ == "__main__":
     try:
