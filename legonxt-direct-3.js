@@ -60,7 +60,7 @@
         GET_DEVICE_INFO: 0x9B
     };
 
-    // NXT Error Codes (from nxt-python)
+    // NXT Error Codes
     const NXT_ERROR = {
         0x00: 'Success',
         0x20: 'Pending communication transaction in progress',
@@ -144,6 +144,11 @@
         CUSTOM: 0x09,
         LOW_SPEED: 0x0A,
         LOW_SPEED_9V: 0x0B,     // Digital I2C sensors
+        COLOR_FULL: 0x0D,   // Detects all colors
+        COLOR_RED: 0x0E,    // Red LED on
+        COLOR_GREEN: 0x0F,  // Green LED on
+        COLOR_BLUE: 0x10,   // Blue LED on
+        COLOR_NONE: 0x11,   // LED off (ambient)
         NO_OF_SENSOR_TYPES: 0x0C
     };
 
@@ -160,7 +165,7 @@
         MODE_MASK: 0xE0
     };
 
-    // Display constants (from nxt-python firmware)
+    // Display constants
     const MODULE_DISPLAY = 0xA0001;
     const DISPLAY_OFFSET = 119;
     const DISPLAY_WIDTH = 100;
@@ -390,7 +395,7 @@
             }
         }
 
-        // System commands for IO Map operations (based on nxt-python implementation)
+        // System commands for IO Map operations
         async sendSystemCommand(opcode, payload = [], needsReply = true) {
             if (!this.connected || !this.writer) {
                 console.warn('[NXT] Not connected');
@@ -619,15 +624,38 @@
 
         // ==================== SENSOR OPERATIONS ====================
 
-        async setupTouchSensor(port) {
+        async setupTouchNXT(port) {
             const portNum = PORT[port];
-            // Use RAW mode instead of BOOL for wider hardware compatibility
+            // Standard NXT Switch Mode
+            await this.sendTelegram(NXT_OPCODE.SET_IN_MODE, [portNum, SENSOR_TYPE.SWITCH, SENSOR_MODE.BOOL]);
+            this.sensorState[port].type = 'nxt_touch';
+        }
+
+        async setupTouchEV3(port) {
+            const portNum = PORT[port];
+            // Treat EV3 Touch as a passive analog sensor to read its resistance ladder
+            await this.sendTelegram(NXT_OPCODE.SET_IN_MODE, [portNum, SENSOR_TYPE.LIGHT_INACTIVE, SENSOR_MODE.RAW]);
+            await new Promise(resolve => setTimeout(resolve, 150));
+            this.sensorState[port].type = 'ev3_touch';
+        }
+
+        async setupColorSensor(port, mode) {
+            const portNum = PORT[port];
+            let type = SENSOR_TYPE.COLOR_FULL;
+            
+            if (mode === 'red') type = SENSOR_TYPE.COLOR_RED;
+            if (mode === 'green') type = SENSOR_TYPE.COLOR_GREEN;
+            if (mode === 'blue') type = SENSOR_TYPE.COLOR_BLUE;
+            if (mode === 'none') type = SENSOR_TYPE.COLOR_NONE;
+
             await this.sendTelegram(NXT_OPCODE.SET_IN_MODE, [
                 portNum,
-                SENSOR_TYPE.SWITCH,
-                SENSOR_MODE.RAW 
+                type,
+                SENSOR_MODE.RAW // Color sensors return 1-6 in Scaled, but we want Raw for intensity
             ]);
-            this.sensorState[port].type = 'touch';
+            
+            this.sensorState[port].type = 'color';
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         async setupLightSensor(port, active = true) {
@@ -777,22 +805,24 @@
         }
 
         async getRawSensorValue(portStr) {
-            if (!this.connected) return 0;
+            const portNum = PORT[portStr];
+            if (!this.connected) return 1023;
+
             try {
-                const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [PORT[portStr]], true);
-                if (reply && reply.length >= 11) {
-                    const raw = reply[5] | (reply[6] << 8);
+                const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
+                if (reply && reply.length >= 7) {
+                    // Extract 10-bit raw value (Bytes 5-6)
+                    const raw = reply[5] | (reply[6] << 8); 
                     this.sensorState[portStr].rawValue = raw;
                     return raw;
                 }
             } catch (e) {
-                console.error("Raw read failed", e);
+                console.warn(`[NXT] Raw read failed:`, e);
             }
-            return this.sensorState[portStr].rawValue;
+            return 1023;
         }
 
         // ==================== DISPLAY OPERATIONS ====================
-        // Based on nxt-python: brick.py read_io_map() and write_io_map()
 
         // Read the NXT screen buffer from IO Map
         async readScreenBuffer() {
@@ -1249,19 +1279,19 @@
                     '👆 TOUCH SENSOR',
                     
                     {
-                        opcode: 'setupTouchSensor',
+                        opcode: 'setupTouchSensorNXT',
                         blockType: Scratch.BlockType.COMMAND,
-                        text: 'setup touch sensor on [PORT]',
+                        text: 'setup NXT touch sensor on [PORT]',
                         arguments: {
                             PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S1' }
                         }
                     },
+
                     {
                         opcode: 'isTouchPressed',
                         blockType: Scratch.BlockType.BOOLEAN,
-                        text: '[TYPE] touch sensor [PORT] pressed?',
+                        text: 'touch sensor [PORT] pressed?',  
                         arguments: {
-                            TYPE: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_TYPE_TOUCH', defaultValue: 'NXT' },
                             PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S1' }
                         }
                     },
@@ -1282,6 +1312,26 @@
                         opcode: 'getLightLevel',
                         blockType: Scratch.BlockType.REPORTER,
                         text: 'light sensor [PORT] brightness',
+                        arguments: {
+                            PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S3' }
+                        }
+                    },
+
+                    '---',
+                    '🌈 COLOR SENSOR',
+                    {
+                        opcode: 'setupColorSensor',
+                        blockType: Scratch.BlockType.COMMAND,
+                        text: 'setup color sensor [PORT] mode [MODE]',
+                        arguments: {
+                            PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S3' },
+                            MODE: { type: Scratch.ArgumentType.STRING, menu: 'COLOR_MODE', defaultValue: 'all colors' }
+                        }
+                    },
+                    {
+                        opcode: 'getColor',
+                        blockType: Scratch.BlockType.REPORTER,
+                        text: 'color sensor [PORT] color',
                         arguments: {
                             PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S3' }
                         }
@@ -1452,6 +1502,7 @@
                     MOTOR_PORT: { acceptReporters: true, items: ['A', 'B', 'C'] },
                     SENSOR_PORT: { acceptReporters: true, items: ['S1', 'S2', 'S3', 'S4'] },
                     SENSOR_TYPE_TOUCH: { acceptReporters: false, items: ['NXT', 'EV3'] },
+                    COLOR_MODE: { acceptReporters: false, items: ['all colors', 'red', 'green', 'blue', 'none'] },
                     MOTOR_STOP: { acceptReporters: false, items: ['brake', 'coast'] },
                     LED_STATE: { acceptReporters: false, items: ['on', 'off'] },
                     SOUND_MODE: { acceptReporters: false, items: ['dBA', 'dB'] },
@@ -1510,18 +1561,15 @@
         }
 
         // Touch Sensor
-        setupTouchSensor(args) {
-            return this.peripheral.setupTouchSensor(args.PORT);
+        setupTouchSensorNXT(args) {
+            return this.peripheral.setupTouchNXT(args.PORT);
         }
 
         async isTouchPressed(args) {
             const raw = await this.peripheral.getRawSensorValue(args.PORT);
             
-            // Thresholds:
-            // Released: ~1023
-            // NXT Pressed: < 100
-            // EV3 Pressed: 150 - 450
-            return raw < 500 && raw > 5; // Ignores 0 (disconnected/error)
+            // Only NXT logic (remove the type parameter since there's only one option)
+            return (raw < 500); // NXT: 1023 released, <500 pressed
         }
 
         // Light Sensor
@@ -1532,6 +1580,29 @@
 
         getLightLevel(args) {
             return this.peripheral.getSensorValue(args.PORT);
+        }
+
+        // Color Sensor Logic
+        setupColorSensor(args) {
+            const modeMap = {
+                'all colors': 'full',
+                'red': 'red',
+                'green': 'green',
+                'blue': 'blue',
+                'none': 'none'
+            };
+            return this.peripheral.setupColorSensor(args.PORT, modeMap[args.MODE]);
+        }
+
+        async getColor(args) {
+            const portNum = PORT[args.PORT];
+            const reply = await this.peripheral.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
+            if (reply && reply.length >= 11) {
+                const colorIdx = reply[9]; // Scaled value contains the Color ID (1-6)
+                const colors = ['none', 'black', 'blue', 'green', 'yellow', 'red', 'white'];
+                return colors[colorIdx] || 'none';
+            }
+            return 'none';
         }
 
         // Sound Sensor
@@ -1620,9 +1691,15 @@
         getBattery() {
             return this.peripheral.getBatteryLevel();
         }
-    }
+
+        async getRawSensorValue(args) {
+            // This pulls the value from the peripheral and returns it to Scratch
+            const value = await this.peripheral.getRawSensorValue(args.PORT);
+            return value;
+        }
+    } // This closes the LegoNXTExtension class
 
     Scratch.extensions.register(new LegoNXTExtension());
-    console.log('🎉 [LEGO NXT Direct Extended] Extension loaded! Based on nxt-python protocol.');
+    console.log('🎉 [LEGO NXT Direct] Extension loaded!');
 
 })(Scratch);
