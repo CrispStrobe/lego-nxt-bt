@@ -104,11 +104,28 @@ chmod +x reset_nxt.sh
 ./reset_nxt.sh
 ```
 
-### Windows/Linux Setup
+### Windows Setup
 
-1. Pair NXT via Bluetooth settings (PIN: 1234)
-2. Note the COM port (Windows) or `/dev/rfcomm0` (Linux)
+1. Pair NXT via Bluetooth settings
+   You probably must first enable "Advanced" Discovery in Windows 11:
+   Open Settings (Win + I).
+   Go to Bluetooth & devices > Devices.
+   Scroll down to Device settings.
+   Change Bluetooth devices discovery from "Default" to Advanced.
+   Enter the NXT Bluetooth PIN: default = 1234
+
+   Note you might also do this in Windows Terminal:
+
+```cmd
+btpair -u
+```
+
+2. Note the COM port (Windows)
 3. Run the bridge
+
+### Linux Setup
+
+You can inspect the COM port at `/dev/rfcomm0`
 
 ## 📁 File Descriptions
 
@@ -116,10 +133,8 @@ chmod +x reset_nxt.sh
 
 | File | Description |
 |------|-------------|
-| `legonxt_turbowarp.js` | **Main extension** - Full feature set |
-| `legonxt-direct.js` | Basic direct Web Serial version |
-| `legonxt-direct-2.js` | Extended version with additional sensors |
-| `legonxt-direct-3.js` | Development version |
+| `legonxt_turbowarp.js` | Lego NXT over local Python Bridge (Full feature set) |
+| `legonxt-direct-3.js` | Lego NXT Direct Bluetooth Connection (Development version) |
 | `legospike_btc.js` | LEGO Spike Prime v.2 (older firmware) extension (different project) |
 
 ### Python Bridge
