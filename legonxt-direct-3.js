@@ -359,39 +359,29 @@
         // ==================== TELEGRAM PROTOCOL ====================
 
         async sendTelegram(opcode, payload = [], needsReply = false) {
-            if (!this.connected || !this.writer) {
-                console.warn('[NXT] Not connected');
-                return null;
-            }
+            if (!this.connected || !this.writer) return null;
 
             const commandType = needsReply ? NXT_OPCODE.DIRECT_CMD : NXT_OPCODE.DIRECT_CMD_NO_REPLY;
             const telegram = new Uint8Array([commandType, opcode, ...payload]);
-            
-            // Add 2-byte length header (little-endian)
             const packet = new Uint8Array(telegram.length + 2);
             packet[0] = telegram.length & 0xFF;
             packet[1] = (telegram.length >> 8) & 0xFF;
             packet.set(telegram, 2);
 
             if (needsReply) {
-                const reqId = this.requestId++;
-                const promise = new Promise((resolve, reject) => {
-                    this.pendingRequests.set(reqId, { resolve, reject, opcode, isSystem: false });
+                return new Promise((resolve, reject) => {
+                    // FIX: Store by Opcode so the Read Loop can find it
+                    this.pendingRequests.set(opcode, { resolve, reject });
+                    
+                    this.writer.write(packet).catch(reject);
+                    
                     setTimeout(() => {
-                        if (this.pendingRequests.has(reqId)) {
-                            this.pendingRequests.delete(reqId);
-                            reject(new Error('Request timeout'));
+                        if (this.pendingRequests.has(opcode)) {
+                            this.pendingRequests.delete(opcode);
+                            reject(new Error(`Timeout waiting for 0x${opcode.toString(16)}`));
                         }
                     }, 2000);
                 });
-
-                try {
-                    await this.writer.write(packet);
-                    return await promise;
-                } catch (error) {
-                    this.pendingRequests.delete(reqId);
-                    throw error;
-                }
             } else {
                 await this.writer.write(packet);
                 return null;
@@ -447,15 +437,39 @@
             try {
                 while (this.connected && this.reader) {
                     const { value, done } = await this.reader.read();
-                    if (done || !this.connected) break;
-                    
-                    this.processIncomingData(value);
+                    if (done) break;
+
+                    let combined = new Uint8Array(this.readBuffer.length + value.length);
+                    combined.set(this.readBuffer);
+                    combined.set(value, this.readBuffer.length);
+                    this.readBuffer = combined;
+
+                    while (this.readBuffer.length >= 2) {
+                        const len = this.readBuffer[0] | (this.readBuffer[1] << 8);
+                        if (this.readBuffer.length < len + 2) break;
+
+                        const packet = this.readBuffer.slice(2, len + 2);
+                        this.readBuffer = this.readBuffer.slice(len + 2);
+
+                        const opcode = packet[1];
+                        const status = packet[2];
+
+                        // FIX: Matching the request stored in sendTelegram
+                        if (this.pendingRequests.has(opcode)) {
+                            const { resolve, reject } = this.pendingRequests.get(opcode);
+                            this.pendingRequests.delete(opcode);
+
+                            if (status === 0) {
+                                resolve(packet.slice(3)); // Success: return payload
+                            } else {
+                                reject(new Error(`NXT Error 0x${status.toString(16)}`));
+                            }
+                        }
+                    }
                 }
-            } catch (error) {
-                if (this.connected) {
-                    console.error('[NXT] Read error:', error);
-                    this.disconnect();
-                }
+            } catch (e) {
+                console.error("Read loop crashed", e);
+                this.disconnect();
             }
         }
 
@@ -605,12 +619,19 @@
 
         async setupTouchSensor(port) {
             const portNum = PORT[port];
+            // 1. Tell NXT to treat this port as a Switch in Boolean mode
             await this.sendTelegram(NXT_OPCODE.SET_IN_MODE, [
                 portNum,
                 SENSOR_TYPE.SWITCH,
                 SENSOR_MODE.BOOL
             ]);
+            
+            // 2. STABILIZATION: The NXT needs a tiny bit of time to 
+            // charge/configure the port before the first reading is valid.
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
             this.sensorState[port].type = 'touch';
+            console.log(`[NXT] Port ${port} configured for Touch Sensor`);
         }
 
         async setupLightSensor(port, active = true) {
@@ -652,56 +673,48 @@
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        async getSensorValue(port) {
-            const portNum = PORT[port];
-            
+        async getSensorValue(portStr) {
+            const portNum = PORT[portStr];
             try {
                 const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
-                
-                if (reply && reply.length >= 13) {
-                    // Scaled value is at bytes 7-8 (signed 16-bit, little-endian)
-                    const scaledValue = reply[7] | (reply[8] << 8);
-                    this.sensorState[port].value = scaledValue;
-                    return scaledValue;
+                if (reply && reply.length >= 12) {
+                    // Scaled value for light/sound (bytes 9-10)
+                    const scaled = reply[9] | (reply[10] << 8);
+                    this.sensorState[portStr].value = (scaled > 32767) ? scaled - 65536 : scaled;
+                    
+                    // Raw value for Touch (bytes 12-13)
+                    const raw = reply[12] | (reply[13] << 8);
+                    this.sensorState[portStr].rawValue = raw;
+                    
+                    return this.sensorState[portStr].value;
                 }
-            } catch (error) {
-                console.warn(`[NXT] Error reading sensor ${port}:`, error);
-            }
-            
-            return this.sensorState[port].value;
+            } catch (e) { console.warn(`[NXT] Read failed:`, e); }
+            return this.sensorState[portStr].value;
         }
 
-        async getUltrasonicDistance(port) {
-            const portNum = PORT[port];
-            
+        async getUltrasonicDistance(portStr) {
+            const portNum = PORT[portStr];
             try {
-                // Write I2C command to read distance (register 0x42)
-                // I2C address for ultrasonic sensor is 0x02 (0x01 << 1)
-                await this.sendTelegram(NXT_OPCODE.LS_WRITE, [
-                    portNum,
-                    2,      // TX length
-                    1,      // RX length
-                    0x02,   // I2C address (0x01 << 1)
-                    0x42    // Distance register
-                ]);
+                // Step 1: Request measurement from I2C address 0x02, register 0x42
+                await this.sendTelegram(NXT_OPCODE.LS_WRITE, [portNum, 2, 1, 0x02, 0x42], false);
                 
-                // Wait for I2C transaction to complete
-                await new Promise(resolve => setTimeout(resolve, 50));
-                
-                // Read I2C response
-                const reply = await this.sendTelegram(NXT_OPCODE.LS_READ, [portNum], true);
-                
-                if (reply && reply.length >= 4) {
-                    // Distance is in byte 3
-                    const distance = reply[3];
-                    this.ultrasonicDistance[port] = distance;
-                    return distance;
+                // Step 2: Critical delay for I2C bus processing
+                await new Promise(r => setTimeout(r, 40));
+
+                // Step 3: Check if data is ready
+                const statusReply = await this.sendTelegram(NXT_OPCODE.LS_GET_STATUS, [portNum], true);
+                if (statusReply && statusReply[0] >= 1) {
+                    const data = await this.sendTelegram(NXT_OPCODE.LS_READ, [portNum], true);
+                    if (data && data.length >= 2) {
+                        const distance = data[1];
+                        if (distance !== 255) { // 255 is 'out of range' or 'not ready'
+                            this.ultrasonicDistance[portStr] = distance;
+                            return distance;
+                        }
+                    }
                 }
-            } catch (error) {
-                console.warn(`[NXT] Error reading ultrasonic ${port}:`, error);
-            }
-            
-            return this.ultrasonicDistance[port];
+            } catch (e) { console.warn(`[NXT] Ultrasonic error:`, e); }
+            return this.ultrasonicDistance[portStr];
         }
 
         // ==================== SOUND OPERATIONS ====================
@@ -740,74 +753,48 @@
 
         // Read the NXT screen buffer from IO Map
         async readScreenBuffer() {
+            if (!this.connected) return null;
+            const CHUNK_SIZE = 32;
             try {
-                // Prepare payload: module_id (u32 LE) + offset (u16 LE) + size (u16 LE)
-                const payload = [
-                    // Module ID (little-endian u32)
-                    MODULE_DISPLAY & 0xFF,
-                    (MODULE_DISPLAY >> 8) & 0xFF,
-                    (MODULE_DISPLAY >> 16) & 0xFF,
-                    (MODULE_DISPLAY >> 24) & 0xFF,
-                    // Offset (little-endian u16)
-                    DISPLAY_OFFSET & 0xFF,
-                    (DISPLAY_OFFSET >> 8) & 0xFF,
-                    // Size to read (little-endian u16)
-                    DISPLAY_BUFFER_SIZE & 0xFF,
-                    (DISPLAY_BUFFER_SIZE >> 8) & 0xFF
-                ];
-
-                console.log('[NXT] Reading screen buffer from IO Map...');
-                const reply = await this.sendSystemCommand(NXT_OPCODE.READ_IO_MAP, payload, true);
-
-                if (reply && reply.length >= 6 + DISPLAY_BUFFER_SIZE) {
-                    // Reply format: module_id (u32) + size (u16) + data
-                    const returnedModuleId = reply[0] | (reply[1] << 8) | (reply[2] << 16) | (reply[3] << 24);
-                    const returnedSize = reply[4] | (reply[5] << 8);
-                    
-                    console.log(`[NXT] Screen read: module=0x${returnedModuleId.toString(16)}, size=${returnedSize}`);
-                    
-                    // Extract display buffer (skip first 6 bytes)
-                    const buffer = reply.slice(6, 6 + DISPLAY_BUFFER_SIZE);
-                    this.screenBuffer.set(buffer);
-                    
-                    return this.screenBufferToBase64();
+                for (let offset = 0; offset < DISPLAY_BUFFER_SIZE; offset += CHUNK_SIZE) {
+                    const sizeToRead = Math.min(CHUNK_SIZE, DISPLAY_BUFFER_SIZE - offset);
+                    const payload = [
+                        MODULE_DISPLAY & 0xFF, (MODULE_DISPLAY >> 8) & 0xFF, (MODULE_DISPLAY >> 16) & 0xFF, (MODULE_DISPLAY >> 24) & 0xFF,
+                        (DISPLAY_OFFSET + offset) & 0xFF, ((DISPLAY_OFFSET + offset) >> 8) & 0xFF,
+                        sizeToRead & 0xFF, (sizeToRead >> 8) & 0xFF
+                    ];
+                    const reply = await this.sendSystemCommand(NXT_OPCODE.READ_IO_MAP, payload, true);
+                    if (reply && reply.length >= 6) {
+                        const data = reply.slice(6);
+                        this.screenBuffer.set(data, offset);
+                    }
                 }
+                return this.screenBufferToBase64();
             } catch (error) {
-                console.error('[NXT] Error reading screen:', error);
+                console.error('[NXT] Display read error:', error);
+                return null;
             }
-            return null;
         }
 
         // Write the local screen buffer to NXT display IO Map
         async updateDisplay() {
+            if (!this.connected) return;
+            const CHUNK_SIZE = 32; 
             try {
-                // Prepare payload: module_id (u32 LE) + offset (u16 LE) + size (u16 LE) + data
-                const payload = [
-                    // Module ID (little-endian u32)
-                    MODULE_DISPLAY & 0xFF,
-                    (MODULE_DISPLAY >> 8) & 0xFF,
-                    (MODULE_DISPLAY >> 16) & 0xFF,
-                    (MODULE_DISPLAY >> 24) & 0xFF,
-                    // Offset (little-endian u16)
-                    DISPLAY_OFFSET & 0xFF,
-                    (DISPLAY_OFFSET >> 8) & 0xFF,
-                    // Size to write (little-endian u16)
-                    DISPLAY_BUFFER_SIZE & 0xFF,
-                    (DISPLAY_BUFFER_SIZE >> 8) & 0xFF,
-                    // Display buffer data
-                    ...this.screenBuffer
-                ];
-
-                console.log('[NXT] Writing screen buffer to IO Map...');
-                await this.sendSystemCommand(NXT_OPCODE.WRITE_IO_MAP, payload, false);
-                
-                // Small delay to ensure display updates
-                await new Promise(resolve => setTimeout(resolve, 150));
-                
-                console.log('[NXT] Screen updated successfully');
+                for (let offset = 0; offset < DISPLAY_BUFFER_SIZE; offset += CHUNK_SIZE) {
+                    const sizeToWrite = Math.min(CHUNK_SIZE, DISPLAY_BUFFER_SIZE - offset);
+                    const chunk = this.screenBuffer.slice(offset, offset + sizeToWrite);
+                    const payload = [
+                        MODULE_DISPLAY & 0xFF, (MODULE_DISPLAY >> 8) & 0xFF, (MODULE_DISPLAY >> 16) & 0xFF, (MODULE_DISPLAY >> 24) & 0xFF,
+                        (DISPLAY_OFFSET + offset) & 0xFF, ((DISPLAY_OFFSET + offset) >> 8) & 0xFF,
+                        sizeToWrite & 0xFF, (sizeToWrite >> 8) & 0xFF,
+                        ...chunk
+                    ];
+                    await this.sendSystemCommand(NXT_OPCODE.WRITE_IO_MAP, payload, false);
+                    await new Promise(r => setTimeout(r, 15)); // Small delay for NXT processing
+                }
             } catch (error) {
-                console.error('[NXT] Error updating display:', error);
-                throw error;
+                console.error('[NXT] Display write error:', error);
             }
         }
 
@@ -1223,8 +1210,9 @@
                     {
                         opcode: 'isTouchPressed',
                         blockType: Scratch.BlockType.BOOLEAN,
-                        text: 'touch sensor [PORT] pressed?',
+                        text: '[TYPE] touch sensor [PORT] pressed?',
                         arguments: {
+                            TYPE: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_TYPE_TOUCH', defaultValue: 'NXT' },
                             PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S1' }
                         }
                     },
@@ -1406,6 +1394,7 @@
                 menus: {
                     MOTOR_PORT: { acceptReporters: true, items: ['A', 'B', 'C'] },
                     SENSOR_PORT: { acceptReporters: true, items: ['S1', 'S2', 'S3', 'S4'] },
+                    SENSOR_TYPE_TOUCH: { acceptReporters: false, items: ['NXT', 'EV3'] },
                     MOTOR_STOP: { acceptReporters: false, items: ['brake', 'coast'] },
                     LED_STATE: { acceptReporters: false, items: ['on', 'off'] },
                     SOUND_MODE: { acceptReporters: false, items: ['dBA', 'dB'] },
@@ -1469,8 +1458,11 @@
         }
 
         async isTouchPressed(args) {
-            const value = await this.peripheral.getSensorValue(args.PORT);
-            return value === 1;
+            await this.peripheral.getSensorValue(args.PORT);
+            // Logic: NXT touch is ~0 pressed, EV3 touch is ~180 pressed.
+            // Both are ~1023 when released. Threshold 500 covers both.
+            const raw = this.peripheral.sensorState[args.PORT].rawValue;
+            return raw < 500 && raw > 0;
         }
 
         // Light Sensor
