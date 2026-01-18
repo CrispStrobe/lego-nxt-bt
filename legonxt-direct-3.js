@@ -370,17 +370,19 @@
 
             if (needsReply) {
                 return new Promise((resolve, reject) => {
-                    // FIX: Store by Opcode so the Read Loop can find it
-                    this.pendingRequests.set(opcode, { resolve, reject });
-                    
-                    this.writer.write(packet).catch(reject);
-                    
-                    setTimeout(() => {
+                    // Set a strict timeout to clear the request if NXT is silent
+                    const timeout = setTimeout(() => {
                         if (this.pendingRequests.has(opcode)) {
                             this.pendingRequests.delete(opcode);
-                            reject(new Error(`Timeout waiting for 0x${opcode.toString(16)}`));
+                            resolve(null); // Resolve with null so blocks don't stay yellow
                         }
-                    }, 2000);
+                    }, 1000);
+
+                    this.pendingRequests.set(opcode, { resolve, reject, timeout });
+                    this.writer.write(packet).catch((err) => {
+                        clearTimeout(timeout);
+                        reject(err);
+                    });
                 });
             } else {
                 await this.writer.write(packet);
@@ -675,6 +677,30 @@
 
         async getSensorValue(portStr) {
             const portNum = PORT[portStr];
+            if (!this.connected) return 0;
+
+            try {
+                const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
+                
+                // Offset 5-6: Raw Data (Correct for both NXT/EV3 Touch)
+                // Offset 9-10: Scaled Data (Correct for Light/Sound)
+                if (reply && reply.length >= 11) {
+                    const raw = reply[5] | (reply[6] << 8); 
+                    const scaled = reply[9] | (reply[10] << 8);
+
+                    this.sensorState[portStr].rawValue = raw;
+                    this.sensorState[portStr].value = (scaled > 32767) ? scaled - 65536 : scaled;
+
+                    return this.sensorState[portStr].value;
+                }
+            } catch (e) {
+                console.warn(`[NXT] Read error on ${portStr}:`, e);
+            }
+            return this.sensorState[portStr].value;
+        }
+        
+        async getSensorValue_old(portStr) {
+            const portNum = PORT[portStr];
             try {
                 const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
                 if (reply && reply.length >= 12) {
@@ -694,26 +720,39 @@
 
         async getUltrasonicDistance(portStr) {
             const portNum = PORT[portStr];
+            if (!this.connected) return this.ultrasonicDistance[portStr];
+
             try {
-                // Step 1: Request measurement from I2C address 0x02, register 0x42
+                // 1. Write request to Ultrasonic register 0x42
                 await this.sendTelegram(NXT_OPCODE.LS_WRITE, [portNum, 2, 1, 0x02, 0x42], false);
                 
-                // Step 2: Critical delay for I2C bus processing
-                await new Promise(r => setTimeout(r, 40));
+                // 2. Poll for the data to be ready in the NXT buffer
+                let ready = false;
+                for (let i = 0; i < 5; i++) {
+                    const status = await this.sendTelegram(NXT_OPCODE.LS_GET_STATUS, [portNum], true);
+                    if (status && status[0] > 0) {
+                        ready = true;
+                        break;
+                    }
+                    await new Promise(r => setTimeout(r, 25)); // Small gap for I2C bus
+                }
 
-                // Step 3: Check if data is ready
-                const statusReply = await this.sendTelegram(NXT_OPCODE.LS_GET_STATUS, [portNum], true);
-                if (statusReply && statusReply[0] >= 1) {
+                // 3. Read the actual byte
+                if (ready) {
                     const data = await this.sendTelegram(NXT_OPCODE.LS_READ, [portNum], true);
                     if (data && data.length >= 2) {
-                        const distance = data[1];
-                        if (distance !== 255) { // 255 is 'out of range' or 'not ready'
-                            this.ultrasonicDistance[portStr] = distance;
-                            return distance;
+                        const dist = data[1];
+                        if (dist > 0 && dist < 255) {
+                            this.ultrasonicDistance[portStr] = dist;
+                            return dist;
+                        } else if (dist === 255) {
+                            return 255; // Far
                         }
                     }
                 }
-            } catch (e) { console.warn(`[NXT] Ultrasonic error:`, e); }
+            } catch (e) {
+                console.error("Ultrasonic read failed:", e);
+            }
             return this.ultrasonicDistance[portStr];
         }
 
@@ -731,7 +770,7 @@
             ]);
         }
 
-        // ==================== BATTERY ====================
+        // ==================== BATTERY and DEBUG ====================
 
         async getBatteryLevel() {
             try {
@@ -746,6 +785,19 @@
             }
             
             return this.batteryLevel;
+        }
+
+        async getRawSensorValue(args) {
+            try {
+                // Promise.race prevents the Scratch UI from hanging if the NXT doesn't reply
+                await Promise.race([
+                    this.peripheral.getSensorValue(args.PORT),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500))
+                ]);
+                return this.peripheral.sensorState[args.PORT].rawValue;
+            } catch (e) {
+                return "Error"; 
+            }
         }
 
         // ==================== DISPLAY OPERATIONS ====================
@@ -805,26 +857,32 @@
 
         // Set a pixel in the local screen buffer
         setPixel(x, y, on = true) {
-            if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) return;
-            
-            const byteIndex = Math.floor(y / 8) * DISPLAY_WIDTH + x;
-            const bitIndex = y % 8;
-            
+            // Round and bounds check
+            x = Math.floor(x);
+            y = Math.floor(y);
+            if (x < 0 || x >= 100 || y < 0 || y >= 64) return;
+
+            // bank = which horizontal row of 8-pixel strips
+            const bank = Math.floor(y / 8); 
+            // bit = which vertical bit within that byte
+            const bit = y % 8;
+            // index = which horizontal byte within that bank
+            const index = (bank * 100) + x;
+
             if (on) {
-                this.screenBuffer[byteIndex] |= (1 << bitIndex);
+                this.screenBuffer[index] |= (1 << bit);
             } else {
-                this.screenBuffer[byteIndex] &= ~(1 << bitIndex);
+                this.screenBuffer[index] &= ~(1 << bit);
             }
         }
 
         // Get a pixel from the local screen buffer
         getPixel(x, y) {
-            if (x < 0 || x >= DISPLAY_WIDTH || y < 0 || y >= DISPLAY_HEIGHT) return false;
-            
-            const byteIndex = Math.floor(y / 8) * DISPLAY_WIDTH + x;
-            const bitIndex = y % 8;
-            
-            return (this.screenBuffer[byteIndex] & (1 << bitIndex)) !== 0;
+            if (x < 0 || x >= 100 || y < 0 || y >= 64) return false;
+            const bank = Math.floor(y / 8);
+            const bit = y % 8;
+            const index = (bank * 100) + x;
+            return (this.screenBuffer[index] & (1 << bit)) !== 0;
         }
 
         // Draw a line using Bresenham's algorithm
@@ -1389,7 +1447,15 @@
                         opcode: 'getBattery',
                         blockType: Scratch.BlockType.REPORTER,
                         text: 'battery level (mV)'
-                    }
+                    },
+                    {
+                        opcode: 'getRawSensorValue',
+                        blockType: Scratch.BlockType.REPORTER,
+                        text: 'raw value of sensor [PORT]',
+                        arguments: {
+                            PORT: { type: Scratch.ArgumentType.STRING, menu: 'SENSOR_PORT', defaultValue: 'S1' }
+                        }
+                    },
                 ],
                 menus: {
                     MOTOR_PORT: { acceptReporters: true, items: ['A', 'B', 'C'] },
@@ -1459,10 +1525,17 @@
 
         async isTouchPressed(args) {
             await this.peripheral.getSensorValue(args.PORT);
-            // Logic: NXT touch is ~0 pressed, EV3 touch is ~180 pressed.
-            // Both are ~1023 when released. Threshold 500 covers both.
             const raw = this.peripheral.sensorState[args.PORT].rawValue;
-            return raw < 500 && raw > 0;
+
+            // RELEASED (Both): ~1023
+            // NXT PRESSED: ~0 to 60
+            // EV3 PRESSED: ~150 to 400
+            // ERROR/EMPTY: 0 (We ignore this now)
+
+            const isNxtPressed = (raw > 2 && raw < 60);
+            const isEv3Pressed = (raw > 120 && raw < 450);
+
+            return isNxtPressed || isEv3Pressed;
         }
 
         // Light Sensor
@@ -1531,9 +1604,12 @@
             return this.peripheral.drawText(args.TEXT, args.X, args.Y);
         }
 
-        drawPixel(args) {
+        async drawPixel(args) {
             const on = args.STATE === 'on';
-            return this.peripheral.setPixel(args.X, args.Y, on);
+            this.peripheral.setPixel(Cast.toNumber(args.X), Cast.toNumber(args.Y), on);
+            
+            // Auto-update the brick so the user doesn't have to use two blocks
+            await this.peripheral.updateDisplay();
         }
 
         drawLine(args) {
