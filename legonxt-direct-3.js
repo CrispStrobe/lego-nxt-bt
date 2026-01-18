@@ -621,19 +621,13 @@
 
         async setupTouchSensor(port) {
             const portNum = PORT[port];
-            // 1. Tell NXT to treat this port as a Switch in Boolean mode
+            // Use RAW mode instead of BOOL for wider hardware compatibility
             await this.sendTelegram(NXT_OPCODE.SET_IN_MODE, [
                 portNum,
                 SENSOR_TYPE.SWITCH,
-                SENSOR_MODE.BOOL
+                SENSOR_MODE.RAW 
             ]);
-            
-            // 2. STABILIZATION: The NXT needs a tiny bit of time to 
-            // charge/configure the port before the first reading is valid.
-            await new Promise(resolve => setTimeout(resolve, 50));
-            
             this.sensorState[port].type = 'touch';
-            console.log(`[NXT] Port ${port} configured for Touch Sensor`);
         }
 
         async setupLightSensor(port, active = true) {
@@ -720,40 +714,35 @@
 
         async getUltrasonicDistance(portStr) {
             const portNum = PORT[portStr];
-            if (!this.connected) return this.ultrasonicDistance[portStr];
+            if (!this.connected) return 255;
 
             try {
-                // 1. Write request to Ultrasonic register 0x42
+                // 1. Write: Port, TxLength (2), RxLength (1), Payload [Address 0x02, Register 0x42]
                 await this.sendTelegram(NXT_OPCODE.LS_WRITE, [portNum, 2, 1, 0x02, 0x42], false);
                 
-                // 2. Poll for the data to be ready in the NXT buffer
+                // 2. Wait and Poll status
                 let ready = false;
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < 8; i++) {
+                    await new Promise(r => setTimeout(r, 30)); // Critical I2C timing
                     const status = await this.sendTelegram(NXT_OPCODE.LS_GET_STATUS, [portNum], true);
                     if (status && status[0] > 0) {
                         ready = true;
                         break;
                     }
-                    await new Promise(r => setTimeout(r, 25)); // Small gap for I2C bus
                 }
 
-                // 3. Read the actual byte
+                // 3. Read the byte
                 if (ready) {
                     const data = await this.sendTelegram(NXT_OPCODE.LS_READ, [portNum], true);
                     if (data && data.length >= 2) {
                         const dist = data[1];
-                        if (dist > 0 && dist < 255) {
-                            this.ultrasonicDistance[portStr] = dist;
-                            return dist;
-                        } else if (dist === 255) {
-                            return 255; // Far
-                        }
+                        return dist === 0 ? 255 : dist;
                     }
                 }
             } catch (e) {
-                console.error("Ultrasonic read failed:", e);
+                console.error("Ultrasonic I2C Error", e);
             }
-            return this.ultrasonicDistance[portStr];
+            return 255;
         }
 
         // ==================== SOUND OPERATIONS ====================
@@ -787,17 +776,19 @@
             return this.batteryLevel;
         }
 
-        async getRawSensorValue(args) {
+        async getRawSensorValue(portStr) {
+            if (!this.connected) return 0;
             try {
-                // Promise.race prevents the Scratch UI from hanging if the NXT doesn't reply
-                await Promise.race([
-                    this.peripheral.getSensorValue(args.PORT),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 500))
-                ]);
-                return this.peripheral.sensorState[args.PORT].rawValue;
+                const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [PORT[portStr]], true);
+                if (reply && reply.length >= 11) {
+                    const raw = reply[5] | (reply[6] << 8);
+                    this.sensorState[portStr].rawValue = raw;
+                    return raw;
+                }
             } catch (e) {
-                return "Error"; 
+                console.error("Raw read failed", e);
             }
+            return this.sensorState[portStr].rawValue;
         }
 
         // ==================== DISPLAY OPERATIONS ====================
@@ -1524,18 +1515,13 @@
         }
 
         async isTouchPressed(args) {
-            await this.peripheral.getSensorValue(args.PORT);
-            const raw = this.peripheral.sensorState[args.PORT].rawValue;
-
-            // RELEASED (Both): ~1023
-            // NXT PRESSED: ~0 to 60
-            // EV3 PRESSED: ~150 to 400
-            // ERROR/EMPTY: 0 (We ignore this now)
-
-            const isNxtPressed = (raw > 2 && raw < 60);
-            const isEv3Pressed = (raw > 120 && raw < 450);
-
-            return isNxtPressed || isEv3Pressed;
+            const raw = await this.peripheral.getRawSensorValue(args.PORT);
+            
+            // Thresholds:
+            // Released: ~1023
+            // NXT Pressed: < 100
+            // EV3 Pressed: 150 - 450
+            return raw < 500 && raw > 5; // Ignores 0 (disconnected/error)
         }
 
         // Light Sensor
