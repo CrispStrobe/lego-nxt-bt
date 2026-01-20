@@ -18,6 +18,7 @@ import time
 import base64
 import argparse
 import traceback
+import signal
 from datetime import datetime
 
 # EV3 imports
@@ -29,6 +30,31 @@ from ev3dev2.display import Display
 from ev3dev2.button import Button
 from ev3dev2.led import Leds
 from ev3dev2.power import PowerSupply
+
+def signal_handler(sig, frame):
+    """Handle Ctrl+C and termination signals"""
+    global stop_all
+    print("\nStopping all scripts...")
+    stop_all = True
+    
+    # Stop all motors immediately
+    try:
+        for motor in list(motors.values()):
+            if motor:
+                try:
+                    motor.stop()
+                except:
+                    pass
+    except:
+        pass
+    
+    # Clean exit
+    print("Shutdown complete")
+    os._exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 # Configuration
 PORT = 8080
@@ -73,23 +99,53 @@ def log(message, data=None):
         print("[{0}] {1}".format(timestamp, message))
 
 def get_motor(port_char):
-    """Lazy load motors with verbose logging"""
+    """Lazy load motors with disconnect protection and optimization"""
     vlog("get_motor called", {"port": port_char})
-    if port_char not in motors:
+    
+    # Check if motor exists in cache
+    if port_char in motors:
+        motor = motors[port_char]
+        if motor:
+            # Verify motor is still connected
+            try:
+                _ = motor.is_running  # Quick connectivity check
+                return motor
+            except Exception as e:
+                log("Motor {0} disconnected".format(port_char), str(e))
+                motors[port_char] = None
+                # Fall through to re-initialization
+    
+    # Initialize new motor
+    try:
+        mapping = {'A': OUTPUT_A, 'B': OUTPUT_B, 'C': OUTPUT_C, 'D': OUTPUT_D}
+        
+        # Try LargeMotor first (most common)
         try:
-            mapping = {'A': OUTPUT_A, 'B': OUTPUT_B, 'C': OUTPUT_C, 'D': OUTPUT_D}
             motors[port_char] = LargeMotor(mapping[port_char])
-            log("Motor initialized on port {0}".format(port_char))
-            vlog("Motor details", {
-                "port": port_char,
-                "driver": motors[port_char].driver_name,
-                "address": motors[port_char].address
-            })
-        except Exception as e:
-            log("Failed to initialize motor on port {0}".format(port_char), str(e))
-            if VERBOSE:
-                traceback.print_exc()
-            motors[port_char] = None
+            log("Large motor initialized on port {0}".format(port_char))
+        except:
+            # Try MediumMotor as fallback
+            try:
+                motors[port_char] = MediumMotor(mapping[port_char])
+                log("Medium motor initialized on port {0}".format(port_char))
+            except:
+                log("No motor found on port {0}".format(port_char))
+                motors[port_char] = None
+                return None
+        
+        vlog("Motor details", {
+            "port": port_char,
+            "driver": motors[port_char].driver_name,
+            "address": motors[port_char].address,
+            "type": motors[port_char].__class__.__name__
+        })
+        
+    except Exception as e:
+        log("Failed to initialize motor on port {0}".format(port_char), str(e))
+        if VERBOSE:
+            traceback.print_exc()
+        motors[port_char] = None
+    
     return motors[port_char]
 
 def get_medium_motor(port_char):
@@ -159,6 +215,24 @@ def get_sensor(port, sensor_type):
                 traceback.print_exc()
             sensors[key] = None
     return sensors[key]
+
+def safe_motor_command(motor, command_func, error_msg="Motor operation failed"):
+    """Execute motor command with disconnect protection"""
+    if not motor:
+        return False
+    
+    try:
+        command_func()
+        return True
+    except Exception as e:
+        # Motor likely disconnected during operation
+        log(error_msg, str(e))
+        # Remove from cache to force re-initialization
+        for port, m in list(motors.items()):
+            if m is motor:
+                motors[port] = None
+                break
+        return False
 
 class BridgeHandler(http.server.BaseHTTPRequestHandler):
     
@@ -277,8 +351,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             # === MOTORS ===
             elif command == 'motor_run':
                 m = get_motor(data['port'])
-                if m:
-                    m.on(SpeedPercent(data['speed']))
+                if safe_motor_command(
+                    m, 
+                    lambda: m.on(SpeedPercent(data['speed'])),
+                    "Motor run failed"
+                ):
                     vlog("Motor running", {"port": data['port'], "speed": data['speed']})
                     self._send_json({"status": "ok"})
                 else:
@@ -286,12 +363,16 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
             elif command == 'motor_run_for':
                 m = get_motor(data['port'])
-                if m:
-                    m.on_for_rotations(
+                if safe_motor_command(
+                    m,
+                    lambda: m.on_for_rotations(
                         SpeedPercent(data['speed']), 
                         data['rotations'], 
+                        brake=data.get('brake', True),
                         block=False
-                    )
+                    ),
+                    "Motor run_for failed"
+                ):
                     vlog("Motor run_for", {
                         "port": data['port'], 
                         "speed": data['speed'], 
@@ -337,9 +418,12 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
             elif command == 'motor_stop':
                 m = get_motor(data['port'])
-                if m:
-                    brake_mode = data.get('brake', 'brake')
-                    m.stop(stop_action=brake_mode)
+                brake_mode = data.get('brake', 'brake')
+                if safe_motor_command(
+                    m,
+                    lambda: m.stop(stop_action=brake_mode),
+                    "Motor stop failed"
+                ):
                     vlog("Motor stopped", {"port": data['port'], "mode": brake_mode})
                     self._send_json({"status": "ok"})
                 else:
@@ -366,15 +450,22 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             elif command == 'tank_drive':
                 motor_left = get_motor(data.get('left_port', 'B'))
                 motor_right = get_motor(data.get('right_port', 'C'))
-                if motor_left and motor_right:
+                
+                if not motor_left or not motor_right:
+                    self._send_json({"status": "error", "msg": "Motors not connected"})
+                    return
+                
+                try:
                     motor_left.on_for_rotations(
                         SpeedPercent(data['left']), 
                         data['rotations'], 
+                        brake=data.get('brake', True),
                         block=False
                     )
                     motor_right.on_for_rotations(
                         SpeedPercent(data['right']), 
-                        data['rotations'], 
+                        data['rotations'],
+                        brake=data.get('brake', True),
                         block=True
                     )
                     vlog("Tank drive", {
@@ -383,8 +474,12 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                         "rotations": data['rotations']
                     })
                     self._send_json({"status": "ok"})
-                else:
-                    self._send_json({"status": "error", "msg": "Motors not connected"})
+                except Exception as e:
+                    log("Tank drive failed", str(e))
+                    # Clear both motors from cache
+                    motors[data.get('left_port', 'B')] = None
+                    motors[data.get('right_port', 'C')] = None
+                    self._send_json({"status": "error", "msg": "Tank drive failed - motors disconnected"})
 
             elif command == 'stop_all_motors':
                 try:
@@ -712,16 +807,32 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             elif self.path.startswith('/motor/position/'):
                 port = self.path.split('/')[-1].upper()
                 m = get_motor(port)
-                value = m.position if m else 0
-                vlog("Motor position read", {"port": port, "position": value})
-                self._send_json({"value": value})
+                if m:
+                    try:
+                        value = m.position
+                        vlog("Motor position read", {"port": port, "position": value})
+                        self._send_json({"value": value})
+                    except Exception as e:
+                        log("Motor position read failed - disconnected", str(e))
+                        motors[port] = None
+                        self._send_json({"value": 0})
+                else:
+                    self._send_json({"value": 0})
 
             elif self.path.startswith('/motor/speed/'):
                 port = self.path.split('/')[-1].upper()
                 m = get_motor(port)
-                value = m.speed if m else 0
-                vlog("Motor speed read", {"port": port, "speed": value})
-                self._send_json({"value": value})
+                if m:
+                    try:
+                        value = m.speed
+                        vlog("Motor speed read", {"port": port, "speed": value})
+                        self._send_json({"value": value})
+                    except Exception as e:
+                        log("Motor speed read failed - disconnected", str(e))
+                        motors[port] = None
+                        self._send_json({"value": 0})
+                else:
+                    self._send_json({"value": 0})
 
             elif self.path.startswith('/motor/state/'):
                 port = self.path.split('/')[-1].upper()
