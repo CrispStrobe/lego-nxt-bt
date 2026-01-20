@@ -23,7 +23,7 @@ from datetime import datetime
 # EV3 imports
 from ev3dev2.motor import LargeMotor, MediumMotor, OUTPUT_A, OUTPUT_B, OUTPUT_C, OUTPUT_D, SpeedPercent
 from ev3dev2.sensor import INPUT_1, INPUT_2, INPUT_3, INPUT_4
-from ev3dev2.sensor.lego import TouchSensor, ColorSensor, UltrasonicSensor, GyroSensor, InfraredSensor
+from ev3dev2.sensor.lego import TouchSensor, ColorSensor, UltrasonicSensor, GyroSensor, InfraredSensor, SoundSensor, LightSensor
 from ev3dev2.sound import Sound
 from ev3dev2.display import Display
 from ev3dev2.button import Button
@@ -113,23 +113,48 @@ def get_medium_motor(port_char):
             motors[key] = None
     return motors[key]
 
-def get_sensor(port_num, type_cls):
-    """Lazy load sensors with verbose logging"""
-    vlog("get_sensor called", {"port": port_num, "type": type_cls.__name__})
-    key = "{0}_{1}".format(port_num, type_cls.__name__)
+def get_sensor(port, sensor_type):
+    """Get or create sensor on specified port"""
+    key = "{0}_{1}".format(port, sensor_type)
     if key not in sensors:
+        port_map = {'1': INPUT_1, '2': INPUT_2, '3': INPUT_3, '4': INPUT_4}
+        sensor_classes = {
+            # EV3 sensors
+            'touch': TouchSensor,
+            'color': ColorSensor,
+            'ultrasonic': UltrasonicSensor,
+            'gyro': GyroSensor,
+            'infrared': InfraredSensor,
+            # NXT sensors
+            'sound': SoundSensor,
+            'light': LightSensor
+        }
         try:
-            mapping = {'1': INPUT_1, '2': INPUT_2, '3': INPUT_3, '4': INPUT_4}
-            sensors[key] = type_cls(mapping[port_num])
-            log("Sensor initialized: {0} on port {1}".format(type_cls.__name__, port_num))
+            sensors[key] = sensor_classes[sensor_type](port_map[port])
+            
+            # Set appropriate mode for sensor
+            sensor = sensors[key]
+            if sensor_type == 'touch':
+                sensor.mode = 'TOUCH'
+            elif sensor_type == 'color':
+                sensor.mode = 'COL-REFLECT'  # Default to reflected light
+            elif sensor_type == 'ultrasonic':
+                sensor.mode = 'US-DIST-CM'
+            elif sensor_type == 'gyro':
+                sensor.mode = 'GYRO-ANG'
+            elif sensor_type == 'infrared':
+                sensor.mode = 'IR-PROX'
+            
+            log("Initialized {0} sensor on port {1}".format(sensor_type, port))
             vlog("Sensor details", {
-                "port": port_num,
-                "type": type_cls.__name__,
+                "port": port,
+                "type": sensor_type,
                 "driver": sensors[key].driver_name,
-                "address": sensors[key].address
+                "address": sensors[key].address,
+                "mode": sensors[key].mode
             })
         except Exception as e:
-            log("Failed to initialize {0} on port {1}".format(type_cls.__name__, port_num), str(e))
+            log("Failed to initialize {0} sensor on port {1}".format(sensor_type, port), str(e))
             if VERBOSE:
                 traceback.print_exc()
             sensors[key] = None
@@ -144,7 +169,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self.path, 
             self.client_address[0]
         ))
-        
+
     def _send_json(self, data, code=200):
         """Send JSON response - ENHANCED CORS"""
         vlog("Sending response", {"code": code, "data": data})
@@ -160,11 +185,12 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         """Handle CORS preflight - ENHANCED"""
         vlog("CORS preflight request")
-        self.send_response(200, "ok")
+        self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
         self.send_header('Access-Control-Max-Age', '86400')
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
     def do_POST(self):
@@ -491,15 +517,27 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
             # === SOUND ===
             elif command == 'speak':
-                sound.speak(str(data['text']))
-                vlog("Speaking", {"text": data['text']})
+                text = str(data['text'])
+                # Detect language from text or use system language
+                # Simple heuristic: check for German characters
+                has_umlauts = any(c in text for c in 'äöüÄÖÜß')
+                
+                if has_umlauts or data.get('lang') == 'de':
+                    # German voice with slower speed for clarity
+                    sound.speak(text, espeak_opts='-v de -a 200 -s 120')
+                else:
+                    # English voice (default)
+                    sound.speak(text)
+                
+                vlog("Speaking", {"text": text, "detected_lang": "de" if has_umlauts else "en"})
                 self._send_json({"status": "ok"})
 
             elif command == 'beep':
                 freq = data.get('freq', 1000)
                 dur = data.get('dur', 100)
-                sound.beep(frequency=freq, duration=dur)
-                vlog("Beep", {"freq": freq, "dur": dur})
+                # beep() doesn't take frequency/duration - use play_tone instead
+                sound.play_tone(freq, dur / 1000.0)  # Convert ms to seconds
+                vlog("Beep/Tone", {"freq": freq, "dur": dur})
                 self._send_json({"status": "ok"})
 
             elif command == 'play_tone':
@@ -508,6 +546,20 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 dur = data.get('dur', 1000)  # milliseconds
                 sound.tone(freq, dur)
                 vlog("Playing tone", {"freq": freq, "dur": dur})
+                self._send_json({"status": "ok"})
+            
+            elif command == 'play_tone_sequence':
+                # Play sequence of tones: [(freq, duration_ms, delay_ms), ...]
+                sequence = data.get('sequence', [])
+                sound.tone(sequence)
+                vlog("Tone sequence", {"count": len(sequence)})
+                self._send_json({"status": "ok"})
+
+            elif command == 'simple_beep':
+                # Simple beep without parameters using beep command
+                args = data.get('args', '')  # beep command line args
+                sound.beep(args=args)
+                vlog("Simple beep", {"args": args})
                 self._send_json({"status": "ok"})
 
             elif command == 'play_note':
@@ -554,6 +606,9 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             # === LED ===
             elif command == 'set_led':
                 color = data['color']
+                # Map OFF to BLACK (proper ev3dev2 color)
+                if color == 'OFF':
+                    color = 'BLACK'
                 side = data.get('side', 'BOTH')  # LEFT, RIGHT, or BOTH
                 if side == 'BOTH':
                     leds.set_color("LEFT", color)
@@ -566,6 +621,51 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             elif command == 'led_off':
                 leds.all_off()
                 vlog("LEDs turned off")
+                self._send_json({"status": "ok"})
+            
+            elif command == 'led_reset':
+                leds.reset()
+                vlog("LEDs reset to default")
+                self._send_json({"status": "ok"})
+
+            elif command == 'led_animate_police':
+                color1 = data.get('color1', 'RED')
+                color2 = data.get('color2', 'BLUE')
+                sleeptime = data.get('sleeptime', 0.5)
+                duration = data.get('duration', 5)
+                leds.animate_police_lights(color1, color2, sleeptime=sleeptime, duration=duration, block=False)
+                vlog("LED police animation", {"color1": color1, "color2": color2})
+                self._send_json({"status": "ok"})
+
+            elif command == 'led_animate_flash':
+                color = data.get('color', 'AMBER')
+                groups = data.get('groups', ['LEFT', 'RIGHT'])
+                sleeptime = data.get('sleeptime', 0.5)
+                duration = data.get('duration', 5)
+                leds.animate_flash(color, groups=tuple(groups), sleeptime=sleeptime, duration=duration, block=False)
+                vlog("LED flash animation", {"color": color})
+                self._send_json({"status": "ok"})
+
+            elif command == 'led_animate_cycle':
+                colors = data.get('colors', ['RED', 'GREEN', 'AMBER'])
+                groups = data.get('groups', ['LEFT', 'RIGHT'])
+                sleeptime = data.get('sleeptime', 0.5)
+                duration = data.get('duration', 5)
+                leds.animate_cycle(tuple(colors), groups=tuple(groups), sleeptime=sleeptime, duration=duration, block=False)
+                vlog("LED cycle animation", {"colors": colors})
+                self._send_json({"status": "ok"})
+
+            elif command == 'led_animate_rainbow':
+                duration = data.get('duration', 5)
+                sleeptime = data.get('sleeptime', 0.1)
+                increment = data.get('increment', 0.1)
+                leds.animate_rainbow(increment_by=increment, sleeptime=sleeptime, duration=duration, block=False)
+                vlog("LED rainbow animation")
+                self._send_json({"status": "ok"})
+
+            elif command == 'led_stop_animation':
+                leds.animate_stop()
+                vlog("LED animation stopped")
                 self._send_json({"status": "ok"})
 
             else:
@@ -653,28 +753,17 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 mode = parts[4] if len(parts) > 4 else 'color'
                 
                 sensor = get_sensor(port, ColorSensor)
-                if sensor:
-                    if mode == 'reflected_light_intensity' or mode == 'reflected':
-                        value = sensor.reflected_light_intensity
-                    elif mode == 'ambient_light_intensity' or mode == 'ambient':
-                        value = sensor.ambient_light_intensity
-                    elif mode == 'color':
-                        value = sensor.color
-                    elif mode == 'color_name':
-                        # Return color name instead of number
-                        color_names = {
-                            0: 'none',
-                            1: 'black',
-                            2: 'blue',
-                            3: 'green',
-                            4: 'yellow',
-                            5: 'red',
-                            6: 'white',
-                            7: 'brown'
-                        }
-                        value = color_names.get(sensor.color, 'unknown')
-                    else:
-                        value = 0
+                
+                if not sensor:
+                    self._send_json({"value": 0})
+                    return
+                
+                if mode == 'color':
+                    value = sensor.color
+                elif mode == 'reflected_light_intensity':
+                    value = sensor.reflected_light_intensity
+                elif mode == 'ambient_light_intensity':
+                    value = sensor.ambient_light_intensity
                 else:
                     value = 0
                 
@@ -685,41 +774,28 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             elif self.path.startswith('/sensor/color_rgb/'):
                 parts = self.path.split('/')
                 port = parts[3]
-                component = parts[4] if len(parts) > 4 else 'all'
+                component = parts[4] if len(parts) > 4 else 'red'
                 
                 sensor = get_sensor(port, ColorSensor)
-                if sensor:
-                    rgb = sensor.rgb
-                    if component == 'all':
-                        value = {"red": rgb[0], "green": rgb[1], "blue": rgb[2]}
-                    else:
-                        component_map = {'red': 0, 'green': 1, 'blue': 2}
-                        idx = component_map.get(component, 0)
-                        value = rgb[idx]
-                else:
-                    value = 0 if component != 'all' else {"red": 0, "green": 0, "blue": 0}
+                
+                if not sensor:
+                    self._send_json({"value": 0})
+                    return
+                
+                rgb = sensor.rgb
+                component_map = {'red': 0, 'green': 1, 'blue': 2}
+                idx = component_map.get(component, 0)
+                value = rgb[idx] if rgb else 0
                 
                 vlog("Color RGB read", {"port": port, "component": component, "value": value})
                 self._send_json({"value": value})
 
             # === ULTRASONIC SENSOR ===
             elif self.path.startswith('/sensor/ultrasonic/'):
-                parts = self.path.split('/')
-                port = parts[3]
-                mode = parts[4] if len(parts) > 4 else 'cm'
-                
+                port = self.path.split('/')[-1]
                 sensor = get_sensor(port, UltrasonicSensor)
-                if sensor:
-                    if mode == 'cm' or mode == 'centimeters':
-                        value = sensor.distance_centimeters
-                    elif mode == 'in' or mode == 'inches':
-                        value = sensor.distance_inches
-                    else:
-                        value = sensor.distance_centimeters
-                else:
-                    value = 0
-                
-                vlog("Ultrasonic sensor read", {"port": port, "mode": mode, "distance": value})
+                value = sensor.distance_centimeters if sensor else 0
+                vlog("Ultrasonic sensor read", {"port": port, "distance": value})
                 self._send_json({"value": value})
 
             # === GYRO SENSOR ===
@@ -729,15 +805,18 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 mode = parts[4] if len(parts) > 4 else 'angle'
                 
                 sensor = get_sensor(port, GyroSensor)
-                if sensor:
-                    if mode == 'angle':
-                        value = sensor.angle
-                    elif mode == 'rate':
-                        value = sensor.rate
-                    elif mode == 'both':
-                        value = {"angle": sensor.angle, "rate": sensor.rate}
-                    else:
-                        value = 0
+                
+                if not sensor:
+                    value = 0 if mode != 'both' else {"angle": 0, "rate": 0}
+                    self._send_json({"value": value})
+                    return
+                
+                if mode == 'angle':
+                    value = sensor.angle
+                elif mode == 'rate':
+                    value = sensor.rate
+                elif mode == 'both':
+                    value = {"angle": sensor.angle, "rate": sensor.rate}
                 else:
                     value = 0 if mode != 'both' else {"angle": 0, "rate": 0}
                 
@@ -818,25 +897,36 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"status": "error", "msg": str(e)}, 500)
 
 def run_server():
-    """Start HTTP server"""
-    server = socketserver.TCPServer(("", PORT), BridgeHandler)
-    server.allow_reuse_address = True
-    log("=" * 50)
-    log("EV3 Bridge Server v2.1 Started")
-    log("=" * 50)
-    log("Listening on port {0}".format(PORT))
-    log("Verbose logging: {0}".format('ENABLED' if VERBOSE else 'DISABLED'))
-    log("Scripts directory: {0}".format(SCRIPTS_DIR))
-    log("Sounds directory: {0}".format(SOUNDS_DIR))
-    log("=" * 50)
+    """Start HTTP server with proper port reuse"""
+    # Enable address reuse to prevent "Address already in use" errors
+    socketserver.TCPServer.allow_reuse_address = True
     
+    server = None
     try:
+        server = socketserver.TCPServer(("", PORT), BridgeHandler)
+        server.allow_reuse_address = True
+        
+        log("=" * 50)
+        log("EV3 Bridge Server v2.1 Started")
+        log("=" * 50)
+        log("Listening on port {0}".format(PORT))
+        log("Verbose logging: {0}".format('ENABLED' if VERBOSE else 'DISABLED'))
+        log("Scripts directory: {0}".format(SCRIPTS_DIR))
+        log("Sounds directory: {0}".format(SOUNDS_DIR))
+        log("=" * 50)
+        
         server.serve_forever()
     except KeyboardInterrupt:
         log("Server interrupted")
+    except Exception as e:
+        log("Server error", str(e))
+        if VERBOSE:
+            traceback.print_exc()
     finally:
-        server.shutdown()
-        server.server_close()
+        if server:
+            log("Shutting down server...")
+            server.shutdown()
+            server.server_close()
         log("Server stopped")
 
 def ui_loop():
@@ -859,23 +949,43 @@ def ui_loop():
                 display.text_pixels("Port: {0}".format(PORT), x=10, y=35)
                 display.text_pixels("Scripts: {0}".format(len(running_scripts)), x=10, y=50)
                 
-                # Motor status
+                # Motor status - with disconnect protection
                 y = 65
-                for port, motor in motors.items():
+                for port, motor in list(motors.items()):  # Use list() to avoid dict change during iteration
                     if motor:
-                        display.text_pixels("M{0}: {1}".format(port, motor.position), x=10, y=y)
-                        y += 15
-                        if y > 110:
-                            break
+                        try:
+                            # Test if motor is still connected
+                            pos = motor.position
+                            display.text_pixels("M{0}: {1}".format(port, pos), x=10, y=y)
+                            y += 15
+                            if y > 110:
+                                break
+                        except Exception as e:
+                            # Motor disconnected - remove from cache
+                            log("Motor {0} disconnected".format(port), str(e))
+                            motors[port] = None
                 
-                # Sensors
-                sensor_count = len([s for s in sensors.values() if s is not None])
+                # Sensors - with disconnect protection
+                sensor_count = 0
+                for key, sensor in list(sensors.items()):
+                    if sensor:
+                        try:
+                            # Test if sensor is still connected by accessing mode
+                            _ = sensor.mode
+                            sensor_count += 1
+                        except Exception:
+                            # Sensor disconnected - remove from cache
+                            sensors[key] = None
+                
                 if sensor_count > 0:
                     display.text_pixels("Sensors: {0}".format(sensor_count), x=10, y=95)
                 
                 # Battery
-                voltage = power.measured_volts
-                display.text_pixels("Bat: {0:.1f}V".format(voltage), x=10, y=110)
+                try:
+                    voltage = power.measured_volts
+                    display.text_pixels("Bat: {0:.1f}V".format(voltage), x=10, y=110)
+                except Exception as e:
+                    log("Battery read error", str(e))
                 
                 # Instructions
                 display.text_pixels("Press BACK to exit", x=5, y=120)
@@ -896,7 +1006,7 @@ def ui_loop():
                 display.text_pixels("Shutting down...", x=30, y=60)
                 display.update()
                 time.sleep(1)
-                sys.exit(0)
+                os._exit(0)  # Force exit
         except Exception as e:
             log("Button check error", str(e))
         

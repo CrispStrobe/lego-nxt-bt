@@ -65,6 +65,15 @@
       setLED: 'set LED to [COLOR]',
       setVolume: 'set volume to [VOLUME]%',
       playTone: 'play tone [NOTE] for [DURATION] secs',
+      setLEDSide: 'set LED [SIDE] to [COLOR]',
+        ledAllOff: 'turn all LEDs off',
+        ledReset: 'reset LEDs to default',
+        ledAnimate: 'LED animate [ANIMATION] [COLOR1] [COLOR2] for [DURATION] secs speed [SLEEPTIME]',
+        playSong: 'play song [SONG] at tempo [TEMPO]',
+        playToneSequence: 'play tone sequence [SEQUENCE]',
+        playFile: 'play sound file [FILENAME] volume [VOLUME]%',
+        ledStopAnimation: 'stop LED animation',
+        getVolume: 'volume %',
       
       // System
       system: 'System',
@@ -152,6 +161,17 @@
       setLED: 'setze LED auf [COLOR]',
       setVolume: 'setze Lautstärke auf [VOLUME]%',
       playTone: 'spiele Ton [NOTE] für [DURATION] Sek',
+      setLEDSide: 'setze LED [SIDE] auf [COLOR]',
+        ledAllOff: 'alle LEDs ausschalten',
+        ledReset: 'LEDs zurücksetzen',
+        ledAnimate: 'LED Animation [ANIMATION] [COLOR1] [COLOR2] für [DURATION] Sek Geschw. [SLEEPTIME]',
+        ledStopAnimation: 'LED Animation stoppen',
+        getVolume: 'Lautstärke %',
+
+        // Sound Blöcke
+        playSong: 'spiele Lied [SONG] Tempo [TEMPO]',
+        playToneSequence: 'spiele Tonfolge [SEQUENCE]',
+        playFile: 'spiele Sounddatei [FILENAME] Lautstärke [VOLUME]%',
       
       // System
       system: 'System',
@@ -213,7 +233,7 @@
       this.spriteStates = {};
       
       // Streaming mode state
-      this.ev3IP = '192.168.1.100';
+      this.ev3IP = '192.168.178.50';
       this.streamingMode = false;
       
       this.log('Extension initialized', { lang: currentLang, version: '2.0.0' });
@@ -694,6 +714,113 @@
               }
             }
           },
+          {
+            opcode: 'ev3SetLEDSide',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('setLEDSide'),
+            arguments: {
+                SIDE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: 'ledSides'
+                },
+                COLOR: {
+                type: Scratch.ArgumentType.STRING,
+                menu: 'ledColors'
+                }
+            }
+            },
+            {
+            opcode: 'ev3LEDAllOff',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('ledAllOff')
+            },
+            {
+            opcode: 'ev3LEDReset',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('ledReset')
+            },
+            {
+            opcode: 'ev3LEDAnimate',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('ledAnimate'),
+                arguments: {
+                    ANIMATION: {
+                    type: Scratch.ArgumentType.STRING,
+                    menu: 'ledAnimations'
+                    },
+                    COLOR1: {
+                    type: Scratch.ArgumentType.STRING,
+                    menu: 'ledColors',
+                    defaultValue: 'RED'
+                    },
+                    COLOR2: {
+                    type: Scratch.ArgumentType.STRING,
+                    menu: 'ledColors',
+                    defaultValue: 'BLUE'
+                    },
+                    DURATION: {
+                    type: Scratch.ArgumentType.NUMBER,
+                    defaultValue: 5
+                    },
+                    SLEEPTIME: {
+                    type: Scratch.ArgumentType.NUMBER,
+                    defaultValue: 0.5
+                    }
+                }
+            },
+            {
+                opcode: 'ev3PlaySong',
+                blockType: Scratch.BlockType.COMMAND,
+                text: t('playSong'),
+                arguments: {
+                    SONG: {
+                    type: Scratch.ArgumentType.STRING,
+                    defaultValue: '[["C4","q"],["D4","q"],["E4","q"]]'  // Changed from () to []
+                    },
+                    TEMPO: {
+                    type: Scratch.ArgumentType.NUMBER,
+                    defaultValue: 120
+                    }
+                }
+                },
+
+            {
+            opcode: 'ev3LEDStopAnimation',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('ledStopAnimation')
+            },
+            {
+            opcode: 'ev3GetVolume',
+            blockType: Scratch.BlockType.REPORTER,
+            text: t('getVolume')
+            },
+
+            {
+            opcode: 'ev3PlayToneSequence',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('playToneSequence'),
+            arguments: {
+                SEQUENCE: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: '[[440,500,100],[523,500,100]]'  // Changed from () to []
+                }
+            }
+            },
+            {
+            opcode: 'ev3PlayFile',
+            blockType: Scratch.BlockType.COMMAND,
+            text: t('playFile'),
+            arguments: {
+                FILENAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'hello.wav'
+                },
+                VOLUME: {
+                type: Scratch.ArgumentType.NUMBER,
+                defaultValue: 100
+                }
+            }
+            },
           
           '---',
           
@@ -830,8 +957,14 @@
             items: ['angle', 'rate']
           },
           ledColors: {
-            items: ['GREEN', 'RED', 'ORANGE', 'AMBER', 'YELLOW', 'OFF']
+            items: ['BLACK', 'GREEN', 'RED', 'ORANGE', 'AMBER', 'YELLOW']
           },
+          ledSides: {
+            items: ['LEFT', 'RIGHT', 'BOTH']
+            },
+            ledAnimations: {
+            items: ['police', 'flash', 'rainbow', 'cycle']
+            },
           irButtons: {
             items: ['top_left', 'bottom_left', 'top_right', 'bottom_right', 'beacon']
           },
@@ -1055,7 +1188,12 @@
     }
 
     ev3Speak(args) {
-      this.sendCommand('speak', { text: args.TEXT });
+    const text = args.TEXT;
+    // Detect if text contains German characters
+    const hasUmlauts = /[äöüÄÖÜß]/.test(text);
+    const lang = hasUmlauts || currentLang === 'de' ? 'de' : 'en';
+    
+    this.sendCommand('speak', { text: text, lang: lang });
     }
 
     ev3Beep(args) {
@@ -1072,6 +1210,80 @@
 
     ev3PlayTone(args) {
       this.sendCommand('play_tone', { note: args.NOTE, duration: args.DURATION });
+    }
+
+    ev3SetLEDSide(args) {
+    const color = args.COLOR === 'OFF' ? 'BLACK' : args.COLOR;
+    this.sendCommand('set_led', { color: color, side: args.SIDE });
+    }
+
+    ev3LEDAllOff() {
+    this.sendCommand('led_off');
+    }
+
+    ev3LEDReset() {
+    this.sendCommand('led_reset');
+    }
+
+    ev3LEDAnimate(args) {
+    const animation = args.ANIMATION;
+    const color1 = args.COLOR1 === 'OFF' ? 'BLACK' : args.COLOR1;
+    const color2 = args.COLOR2 === 'OFF' ? 'BLACK' : args.COLOR2;
+    
+    if (animation === 'police') {
+        this.sendCommand('led_animate_police', {
+        color1: color1,
+        color2: color2,
+        sleeptime: args.SLEEPTIME,
+        duration: args.DURATION
+        });
+    } else if (animation === 'flash') {
+        this.sendCommand('led_animate_flash', {
+        color: color1,
+        sleeptime: args.SLEEPTIME,
+        duration: args.DURATION
+        });
+    } else if (animation === 'rainbow') {
+        this.sendCommand('led_animate_rainbow', {
+        duration: args.DURATION,
+        sleeptime: args.SLEEPTIME
+        });
+    } else if (animation === 'cycle') {
+        this.sendCommand('led_animate_cycle', {
+        colors: [color1, color2],
+        sleeptime: args.SLEEPTIME,
+        duration: args.DURATION
+        });
+    }
+    }
+
+    ev3PlaySong(args) {
+    this.sendCommand('play_song', {
+        notes: JSON.parse(args.SONG),
+        tempo: args.TEMPO
+    });
+    }
+
+    ev3PlayToneSequence(args) {
+    this.sendCommand('play_tone_sequence', {
+        sequence: JSON.parse(args.SEQUENCE)
+    });
+    }
+
+    ev3PlayFile(args) {
+    this.sendCommand('play_file', {
+        filename: args.FILENAME,
+        volume: args.VOLUME
+    });
+    }
+
+    ev3LEDStopAnimation() {
+    this.sendCommand('led_stop_animation');
+    }
+
+    async ev3GetVolume() {
+    const result = await this.sendCommand('get_volume');
+    return result ? result.volume : 50;
     }
 
     // System
@@ -1699,18 +1911,60 @@
       }
       else if (opcode === 'scratchtoev3_ev3Speak') {
         const text = this.getInputValue(block, 'TEXT', blocks);
-        this.addLine('sound.speak(str(' + text + '))');
-      }
+        // Use German voice if extension language is German
+        if (currentLang === 'de') {
+            this.addLine('sound.speak(str(' + text + '), espeak_opts=\'-v de -a 200 -s 120\')');
+        } else {
+            this.addLine('sound.speak(str(' + text + '))');
+        }
+        }
       else if (opcode === 'scratchtoev3_ev3Beep') {
         const freq = this.getInputValue(block, 'FREQUENCY', blocks);
         const duration = this.getInputValue(block, 'DURATION', blocks);
-        this.addLine('sound.beep(frequency=' + freq + ', duration=' + duration + ')');
-      }
+        this.addLine('sound.play_tone(' + freq + ', ' + duration + ' / 1000.0)');
+        }
       else if (opcode === 'scratchtoev3_ev3SetLED') {
         const color = this.getInputValue(block, 'COLOR', blocks).replace(/"/g, '');
-        this.addLine('leds.set_color("LEFT", "' + color + '")');
-        this.addLine('leds.set_color("RIGHT", "' + color + '")');
-      }
+        // Map OFF to BLACK (proper ev3dev2 color)
+        const ev3Color = color === 'OFF' ? 'BLACK' : color;
+        this.addLine('leds.set_color("LEFT", "' + ev3Color + '")');
+        this.addLine('leds.set_color("RIGHT", "' + ev3Color + '")');
+        }
+
+
+      else if (opcode === 'scratchtoev3_ev3SetLEDSide') {
+        const side = this.getInputValue(block, 'SIDE', blocks).replace(/"/g, '');
+        const color = this.getInputValue(block, 'COLOR', blocks).replace(/"/g, '');
+        const ev3Color = color === 'OFF' ? 'BLACK' : color;
+        this.addLine('leds.set_color("' + side + '", "' + ev3Color + '")');
+        }
+        else if (opcode === 'scratchtoev3_ev3LEDAllOff') {
+        this.addLine('leds.all_off()');
+        }
+        else if (opcode === 'scratchtoev3_ev3LEDReset') {
+        this.addLine('leds.reset()');
+        }
+        else if (opcode === 'scratchtoev3_ev3LEDAnimate') {
+            const animation = this.getInputValue(block, 'ANIMATION', blocks).replace(/"/g, '');
+            const color1 = this.getInputValue(block, 'COLOR1', blocks).replace(/"/g, '');
+            const color2 = this.getInputValue(block, 'COLOR2', blocks).replace(/"/g, '');
+            const duration = this.getInputValue(block, 'DURATION', blocks);
+            const sleeptime = this.getInputValue(block, 'SLEEPTIME', blocks);
+            
+            const c1 = color1 === 'OFF' ? 'BLACK' : color1;
+            const c2 = color2 === 'OFF' ? 'BLACK' : color2;
+            
+            if (animation === 'police') {
+                this.addLine('leds.animate_police_lights("' + c1 + '", "' + c2 + '", sleeptime=' + sleeptime + ', duration=' + duration + ', block=False)');
+            } else if (animation === 'flash') {
+                this.addLine('leds.animate_flash("' + c1 + '", sleeptime=' + sleeptime + ', duration=' + duration + ', block=False)');
+            } else if (animation === 'rainbow') {
+                this.addLine('leds.animate_rainbow(duration=' + duration + ', sleeptime=' + sleeptime + ', block=False)');
+            } else if (animation === 'cycle') {
+                this.addLine('leds.animate_cycle(("' + c1 + '", "' + c2 + '"), sleeptime=' + sleeptime + ', duration=' + duration + ', block=False)');
+            }
+            }
+
       else if (opcode === 'scratchtoev3_ev3SetVolume') {
         const volume = this.getInputValue(block, 'VOLUME', blocks);
         this.addLine('sound.set_volume(' + volume + ')');
@@ -1720,6 +1974,24 @@
         const duration = this.getInputValue(block, 'DURATION', blocks);
         this.addLine('sound.play_note("' + note + '", ' + duration + ')');
       }
+      else if (opcode === 'scratchtoev3_ev3PlaySong') {
+        const song = this.getInputValue(block, 'SONG', blocks);
+        const tempo = this.getInputValue(block, 'TEMPO', blocks);
+        this.addLine('sound.play_song(' + song + ', tempo=' + tempo + ')');
+        }
+        else if (opcode === 'scratchtoev3_ev3PlayToneSequence') {
+        const sequence = this.getInputValue(block, 'SEQUENCE', blocks);
+        this.addLine('sound.tone(' + sequence + ')');
+        }
+        else if (opcode === 'scratchtoev3_ev3PlayFile') {
+        const filename = this.getInputValue(block, 'FILENAME', blocks);
+        const volume = this.getInputValue(block, 'VOLUME', blocks);
+        this.addLine('sound.play_file("' + filename.replace(/"/g, '') + '", volume=' + volume + ')');
+        }
+        else if (opcode === 'scratchtoev3_ev3LEDStopAnimation') {
+        this.addLine('leds.animate_stop()');
+        }
+
       
       // Sprite state blocks
       else if (opcode === 'scratchtoev3_spriteSetPosition') {
@@ -2122,6 +2394,11 @@
       else if (block.opcode === 'scratchtoev3_ev3BatteryLevel') {
         return 'max(0, min(100, ((power.measured_volts - 7.4) / (9.0 - 7.4)) * 100))';
       }
+      // Volume reporter
+        else if (block.opcode === 'scratchtoev3_ev3GetVolume') {
+        return 'sound.get_volume()';
+        }
+
       // Operators
       else if (block.opcode === 'operator_gt') {
         const op1 = this.getInputValue(block, 'OPERAND1', blocks);
