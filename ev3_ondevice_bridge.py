@@ -2,8 +2,9 @@
 
 """
 ev3_ondevice_bridge.py
-Complete EV3 Bridge Server v2.0
+Complete EV3 Bridge Server v2.1
 Runs on EV3 Brick - Provides HTTP API for both streaming control and script management
+Python 3.5.3 compatible
 """
 
 import http.server
@@ -16,6 +17,7 @@ import subprocess
 import time
 import base64
 import argparse
+import traceback
 from datetime import datetime
 
 # EV3 imports
@@ -58,79 +60,111 @@ def vlog(message, data=None):
     if VERBOSE:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         if data:
-            print(f"[{timestamp}] [BRIDGE] {message}: {data}")
+            print("[{0}] [BRIDGE] {1}: {2}".format(timestamp, message, data))
         else:
-            print(f"[{timestamp}] [BRIDGE] {message}")
+            print("[{0}] [BRIDGE] {1}".format(timestamp, message))
 
 def log(message, data=None):
     """Standard logging"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if data:
-        print(f"[{timestamp}] {message}: {data}")
+        print("[{0}] {1}: {2}".format(timestamp, message, data))
     else:
-        print(f"[{timestamp}] {message}")
+        print("[{0}] {1}".format(timestamp, message))
 
 def get_motor(port_char):
     """Lazy load motors with verbose logging"""
-    vlog(f"get_motor called", {"port": port_char})
+    vlog("get_motor called", {"port": port_char})
     if port_char not in motors:
         try:
             mapping = {'A': OUTPUT_A, 'B': OUTPUT_B, 'C': OUTPUT_C, 'D': OUTPUT_D}
             motors[port_char] = LargeMotor(mapping[port_char])
-            log(f"Motor initialized on port {port_char}")
-            vlog(f"Motor details", {
+            log("Motor initialized on port {0}".format(port_char))
+            vlog("Motor details", {
                 "port": port_char,
                 "driver": motors[port_char].driver_name,
                 "address": motors[port_char].address
             })
         except Exception as e:
-            log(f"Failed to initialize motor on port {port_char}", str(e))
+            log("Failed to initialize motor on port {0}".format(port_char), str(e))
+            if VERBOSE:
+                traceback.print_exc()
             motors[port_char] = None
     return motors[port_char]
 
+def get_medium_motor(port_char):
+    """Lazy load medium motors"""
+    vlog("get_medium_motor called", {"port": port_char})
+    key = "M" + port_char
+    if key not in motors:
+        try:
+            mapping = {'A': OUTPUT_A, 'B': OUTPUT_B, 'C': OUTPUT_C, 'D': OUTPUT_D}
+            motors[key] = MediumMotor(mapping[port_char])
+            log("Medium motor initialized on port {0}".format(port_char))
+            vlog("Medium motor details", {
+                "port": port_char,
+                "driver": motors[key].driver_name,
+                "address": motors[key].address
+            })
+        except Exception as e:
+            log("Failed to initialize medium motor on port {0}".format(port_char), str(e))
+            if VERBOSE:
+                traceback.print_exc()
+            motors[key] = None
+    return motors[key]
+
 def get_sensor(port_num, type_cls):
     """Lazy load sensors with verbose logging"""
-    vlog(f"get_sensor called", {"port": port_num, "type": type_cls.__name__})
-    key = f"{port_num}_{type_cls.__name__}"
+    vlog("get_sensor called", {"port": port_num, "type": type_cls.__name__})
+    key = "{0}_{1}".format(port_num, type_cls.__name__)
     if key not in sensors:
         try:
             mapping = {'1': INPUT_1, '2': INPUT_2, '3': INPUT_3, '4': INPUT_4}
             sensors[key] = type_cls(mapping[port_num])
-            log(f"Sensor initialized: {type_cls.__name__} on port {port_num}")
-            vlog(f"Sensor details", {
+            log("Sensor initialized: {0} on port {1}".format(type_cls.__name__, port_num))
+            vlog("Sensor details", {
                 "port": port_num,
                 "type": type_cls.__name__,
                 "driver": sensors[key].driver_name,
                 "address": sensors[key].address
             })
         except Exception as e:
-            log(f"Failed to initialize {type_cls.__name__} on port {port_num}", str(e))
+            log("Failed to initialize {0} on port {1}".format(type_cls.__name__, port_num), str(e))
+            if VERBOSE:
+                traceback.print_exc()
             sensors[key] = None
     return sensors[key]
 
 class BridgeHandler(http.server.BaseHTTPRequestHandler):
     
     def log_message(self, format, *args):
-        """Override to use our logging"""
-        if VERBOSE:
-            vlog(f"HTTP {self.command}", {"path": self.path, "client": self.client_address[0]})
-    
+        """Override to ALWAYS log requests for debugging"""
+        log("HTTP {0} {1} from {2}".format(
+            self.command, 
+            self.path, 
+            self.client_address[0]
+        ))
+        
     def _send_json(self, data, code=200):
-        """Send JSON response"""
-        vlog(f"Sending response", {"code": code, "data": data})
+        """Send JSON response - ENHANCED CORS"""
+        vlog("Sending response", {"code": code, "data": data})
         self.send_response(code)
         self.send_header('Content-type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', '*')
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
 
     def do_OPTIONS(self):
-        """Handle CORS preflight"""
+        """Handle CORS preflight - ENHANCED"""
         vlog("CORS preflight request")
         self.send_response(200, "ok")
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header("Access-Control-Allow-Headers", "X-Requested-With, Content-Type")
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', '*')
+        self.send_header('Access-Control-Max-Age', '86400')
         self.end_headers()
 
     def do_POST(self):
@@ -139,11 +173,11 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)
         
         try:
-            data = json.loads(post_data)
+            data = json.loads(post_data.decode('utf-8'))
             command = data.get('cmd')
             
-            log(f"Command received: {command}")
-            vlog(f"Command data", data)
+            log("Command received: {0}".format(command))
+            vlog("Command data", data)
 
             # === UPLOAD HANDLING ===
             if command == 'upload_script':
@@ -151,8 +185,8 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 with open(filename, 'w') as f:
                     f.write(data['code'])
                 os.chmod(filename, 0o755)
-                log(f"Script uploaded: {data['name']}")
-                self._send_json({"status": "ok", "msg": f"Saved {data['name']}"})
+                log("Script uploaded: {0}".format(data['name']))
+                self._send_json({"status": "ok", "msg": "Saved {0}".format(data['name'])})
 
             elif command == 'upload_sound':
                 filename = os.path.join(SOUNDS_DIR, data['name'])
@@ -161,7 +195,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     sound_data = base64.b64decode(data['data'])
                     with open(filename, 'wb') as f:
                         f.write(sound_data)
-                    log(f"Sound uploaded: {data['name']}")
+                    log("Sound uploaded: {0}".format(data['name']))
                     self._send_json({"status": "ok", "msg": "Sound uploaded"})
                 else:
                     self._send_json({"status": "error", "msg": "No sound data"}, 400)
@@ -179,7 +213,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                         'process': proc,
                         'started': time.time()
                     }
-                    log(f"Script started: {data['name']} (ID: {script_id})")
+                    log("Script started: {0} (ID: {1})".format(data['name'], script_id))
                     self._send_json({"status": "ok", "msg": "Started", "script_id": script_id})
                 else:
                     self._send_json({"status": "error", "msg": "File not found"}, 404)
@@ -189,17 +223,37 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 if script_id in running_scripts:
                     running_scripts[script_id]['process'].terminate()
                     del running_scripts[script_id]
-                    log(f"Script stopped (ID: {script_id})")
+                    log("Script stopped (ID: {0})".format(script_id))
                     self._send_json({"status": "ok", "msg": "Stopped"})
                 else:
                     self._send_json({"status": "error", "msg": "Script not found"}, 404)
+
+            elif command == 'list_scripts':
+                try:
+                    scripts = [f for f in os.listdir(SCRIPTS_DIR) if f.endswith('.py')]
+                    vlog("Listing scripts", {"count": len(scripts)})
+                    self._send_json({"status": "ok", "scripts": scripts})
+                except Exception as e:
+                    self._send_json({"status": "error", "msg": str(e)}, 500)
+
+            elif command == 'delete_script':
+                try:
+                    filename = os.path.join(SCRIPTS_DIR, data['name'])
+                    if os.path.exists(filename):
+                        os.remove(filename)
+                        log("Script deleted: {0}".format(data['name']))
+                        self._send_json({"status": "ok", "msg": "Deleted"})
+                    else:
+                        self._send_json({"status": "error", "msg": "File not found"}, 404)
+                except Exception as e:
+                    self._send_json({"status": "error", "msg": str(e)}, 500)
 
             # === MOTORS ===
             elif command == 'motor_run':
                 m = get_motor(data['port'])
                 if m:
                     m.on(SpeedPercent(data['speed']))
-                    vlog(f"Motor running", {"port": data['port'], "speed": data['speed']})
+                    vlog("Motor running", {"port": data['port'], "speed": data['speed']})
                     self._send_json({"status": "ok"})
                 else:
                     self._send_json({"status": "error", "msg": "Motor not connected"})
@@ -212,37 +266,80 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                         data['rotations'], 
                         block=False
                     )
-                    vlog(f"Motor run_for", {
+                    vlog("Motor run_for", {
                         "port": data['port'], 
                         "speed": data['speed'], 
                         "rotations": data['rotations']
                     })
                     self._send_json({"status": "ok"})
                 else:
-                    self._send_json({"status": "error"})
+                    self._send_json({"status": "error", "msg": "Motor not connected"})
+
+            elif command == 'motor_run_timed':
+                m = get_motor(data['port'])
+                if m:
+                    m.on_for_seconds(
+                        SpeedPercent(data['speed']), 
+                        data['seconds'], 
+                        block=data.get('block', False)
+                    )
+                    vlog("Motor run_timed", {
+                        "port": data['port'], 
+                        "speed": data['speed'], 
+                        "seconds": data['seconds']
+                    })
+                    self._send_json({"status": "ok"})
+                else:
+                    self._send_json({"status": "error", "msg": "Motor not connected"})
+
+            elif command == 'motor_run_to_position':
+                m = get_motor(data['port'])
+                if m:
+                    m.on_to_position(
+                        SpeedPercent(data['speed']), 
+                        data['position'], 
+                        block=data.get('block', False)
+                    )
+                    vlog("Motor run_to_position", {
+                        "port": data['port'], 
+                        "speed": data['speed'], 
+                        "position": data['position']
+                    })
+                    self._send_json({"status": "ok"})
+                else:
+                    self._send_json({"status": "error", "msg": "Motor not connected"})
 
             elif command == 'motor_stop':
                 m = get_motor(data['port'])
                 if m:
                     brake_mode = data.get('brake', 'brake')
                     m.stop(stop_action=brake_mode)
-                    vlog(f"Motor stopped", {"port": data['port'], "mode": brake_mode})
+                    vlog("Motor stopped", {"port": data['port'], "mode": brake_mode})
                     self._send_json({"status": "ok"})
                 else:
-                    self._send_json({"status": "error"})
+                    self._send_json({"status": "error", "msg": "Motor not connected"})
 
             elif command == 'motor_reset':
                 m = get_motor(data['port'])
                 if m:
                     m.position = 0
-                    vlog(f"Motor position reset", {"port": data['port']})
+                    vlog("Motor position reset", {"port": data['port']})
                     self._send_json({"status": "ok"})
                 else:
-                    self._send_json({"status": "error"})
+                    self._send_json({"status": "error", "msg": "Motor not connected"})
+
+            elif command == 'medium_motor_run':
+                m = get_medium_motor(data['port'])
+                if m:
+                    m.on(SpeedPercent(data['speed']))
+                    vlog("Medium motor running", {"port": data['port'], "speed": data['speed']})
+                    self._send_json({"status": "ok"})
+                else:
+                    self._send_json({"status": "error", "msg": "Medium motor not connected"})
 
             elif command == 'tank_drive':
-                motor_left = get_motor('B')
-                motor_right = get_motor('C')
+                motor_left = get_motor(data.get('left_port', 'B'))
+                motor_right = get_motor(data.get('right_port', 'C'))
                 if motor_left and motor_right:
                     motor_left.on_for_rotations(
                         SpeedPercent(data['left']), 
@@ -254,7 +351,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                         data['rotations'], 
                         block=True
                     )
-                    vlog(f"Tank drive", {
+                    vlog("Tank drive", {
                         "left": data['left'], 
                         "right": data['right'], 
                         "rotations": data['rotations']
@@ -262,6 +359,17 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"status": "ok"})
                 else:
                     self._send_json({"status": "error", "msg": "Motors not connected"})
+
+            elif command == 'stop_all_motors':
+                try:
+                    for port_char in ['A', 'B', 'C', 'D']:
+                        m = get_motor(port_char)
+                        if m:
+                            m.stop()
+                    vlog("All motors stopped")
+                    self._send_json({"status": "ok"})
+                except Exception as e:
+                    self._send_json({"status": "error", "msg": str(e)})
 
             # === DISPLAY ===
             elif command == 'screen_clear':
@@ -273,7 +381,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             elif command == 'screen_text':
                 display.text_pixels(str(data['text']), x=data['x'], y=data['y'])
                 display.update()
-                vlog(f"Text displayed", {"text": data['text'], "x": data['x'], "y": data['y']})
+                vlog("Text displayed", {"text": data['text'], "x": data['x'], "y": data['y']})
+                self._send_json({"status": "ok"})
+
+            elif command == 'screen_text_grid':
+                # Text using character grid (12 chars x 8 rows)
+                display.text_grid(str(data['text']), x=data['x'], y=data['y'])
+                display.update()
+                vlog("Text grid displayed", {"text": data['text'], "x": data['x'], "y": data['y']})
                 self._send_json({"status": "ok"})
 
             elif command == 'draw_circle':
@@ -281,95 +396,198 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     from PIL import ImageDraw
                     draw = ImageDraw.Draw(display.image)
                     x, y, r = data['x'], data['y'], data['r']
-                    draw.ellipse((x-r, y-r, x+r, y+r), outline='black')
+                    fill = data.get('fill', False)
+                    draw.ellipse((x-r, y-r, x+r, y+r), outline='black', fill='black' if fill else None)
                     display.update()
-                    vlog(f"Circle drawn", {"x": x, "y": y, "r": r})
+                    vlog("Circle drawn", {"x": x, "y": y, "r": r, "fill": fill})
                     self._send_json({"status": "ok"})
                 except Exception as e:
-                    log(f"Draw circle error", str(e))
+                    log("Draw circle error", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
                     self._send_json({"status": "error", "msg": str(e)})
 
             elif command == 'draw_rectangle':
                 try:
                     from PIL import ImageDraw
                     draw = ImageDraw.Draw(display.image)
+                    fill = data.get('fill', False)
                     draw.rectangle((data['x1'], data['y1'], data['x2'], data['y2']), 
-                                   outline='black')
+                                   outline='black', fill='black' if fill else None)
                     display.update()
-                    vlog(f"Rectangle drawn", data)
+                    vlog("Rectangle drawn", data)
                     self._send_json({"status": "ok"})
                 except Exception as e:
-                    log(f"Draw rectangle error", str(e))
+                    log("Draw rectangle error", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
                     self._send_json({"status": "error", "msg": str(e)})
 
             elif command == 'draw_line':
                 try:
                     from PIL import ImageDraw
                     draw = ImageDraw.Draw(display.image)
+                    width = data.get('width', 1)
                     draw.line((data['x1'], data['y1'], data['x2'], data['y2']), 
-                             fill='black')
+                             fill='black', width=width)
                     display.update()
-                    vlog(f"Line drawn", data)
+                    vlog("Line drawn", data)
                     self._send_json({"status": "ok"})
                 except Exception as e:
-                    log(f"Draw line error", str(e))
+                    log("Draw line error", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
+                    self._send_json({"status": "error", "msg": str(e)})
+
+            elif command == 'draw_point':
+                try:
+                    from PIL import ImageDraw
+                    draw = ImageDraw.Draw(display.image)
+                    draw.point((data['x'], data['y']), fill='black')
+                    display.update()
+                    vlog("Point drawn", {"x": data['x'], "y": data['y']})
+                    self._send_json({"status": "ok"})
+                except Exception as e:
+                    log("Draw point error", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
+                    self._send_json({"status": "error", "msg": str(e)})
+
+            elif command == 'draw_polygon':
+                try:
+                    from PIL import ImageDraw
+                    draw = ImageDraw.Draw(display.image)
+                    points = data['points']  # List of [x, y] pairs
+                    fill = data.get('fill', False)
+                    draw.polygon(points, outline='black', fill='black' if fill else None)
+                    display.update()
+                    vlog("Polygon drawn", {"points": points, "fill": fill})
+                    self._send_json({"status": "ok"})
+                except Exception as e:
+                    log("Draw polygon error", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
+                    self._send_json({"status": "error", "msg": str(e)})
+
+            elif command == 'draw_image':
+                try:
+                    from PIL import Image
+                    import io
+                    # Expect base64 encoded image data
+                    img_data = base64.b64decode(data['data'])
+                    img = Image.open(io.BytesIO(img_data))
+                    # Convert to 1-bit black and white
+                    img = img.convert('1')
+                    # Paste onto display
+                    display.image.paste(img, (data.get('x', 0), data.get('y', 0)))
+                    display.update()
+                    vlog("Image drawn", {"x": data.get('x', 0), "y": data.get('y', 0)})
+                    self._send_json({"status": "ok"})
+                except Exception as e:
+                    log("Draw image error", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
                     self._send_json({"status": "error", "msg": str(e)})
 
             # === SOUND ===
             elif command == 'speak':
                 sound.speak(str(data['text']))
-                vlog(f"Speaking", {"text": data['text']})
+                vlog("Speaking", {"text": data['text']})
                 self._send_json({"status": "ok"})
 
             elif command == 'beep':
                 freq = data.get('freq', 1000)
                 dur = data.get('dur', 100)
                 sound.beep(frequency=freq, duration=dur)
-                vlog(f"Beep", {"freq": freq, "dur": dur})
+                vlog("Beep", {"freq": freq, "dur": dur})
+                self._send_json({"status": "ok"})
+
+            elif command == 'play_tone':
+                # Play tone with frequency and duration
+                freq = data.get('freq', 440)
+                dur = data.get('dur', 1000)  # milliseconds
+                sound.tone(freq, dur)
+                vlog("Playing tone", {"freq": freq, "dur": dur})
+                self._send_json({"status": "ok"})
+
+            elif command == 'play_note':
+                # Play musical note
+                note = data.get('note', 'C4')
+                duration = data.get('duration', 0.5)
+                sound.play_note(note, duration)
+                vlog("Playing note", {"note": note, "duration": duration})
+                self._send_json({"status": "ok"})
+
+            elif command == 'play_file':
+                # Play WAV file
+                filename = data.get('filename')
+                if filename:
+                    filepath = os.path.join(SOUNDS_DIR, filename)
+                    if os.path.exists(filepath):
+                        sound.play_file(filepath, volume=data.get('volume', 100))
+                        vlog("Playing file", {"filename": filename})
+                        self._send_json({"status": "ok"})
+                    else:
+                        self._send_json({"status": "error", "msg": "File not found"}, 404)
+                else:
+                    self._send_json({"status": "error", "msg": "No filename"}, 400)
+
+            elif command == 'play_song':
+                # Play sequence of notes
+                notes = data.get('notes', [])  # List of (note, duration) tuples
+                for note, duration in notes:
+                    sound.play_note(note, duration)
+                vlog("Playing song", {"notes": notes})
                 self._send_json({"status": "ok"})
 
             elif command == 'set_volume':
                 volume = data['volume']
                 sound.set_volume(volume)
-                vlog(f"Volume set", {"volume": volume})
+                vlog("Volume set", {"volume": volume})
                 self._send_json({"status": "ok"})
 
-            elif command == 'play_tone':
-                note = data.get('note', 'C4')
-                duration = data.get('duration', 0.5)
-                sound.play_note(note, duration)
-                vlog(f"Playing tone", {"note": note, "duration": duration})
-                self._send_json({"status": "ok"})
+            elif command == 'get_volume':
+                volume = sound.get_volume()
+                vlog("Volume retrieved", {"volume": volume})
+                self._send_json({"status": "ok", "volume": volume})
 
             # === LED ===
             elif command == 'set_led':
                 color = data['color']
-                leds.set_color("LEFT", color)
-                leds.set_color("RIGHT", color)
-                vlog(f"LED set", {"color": color})
+                side = data.get('side', 'BOTH')  # LEFT, RIGHT, or BOTH
+                if side == 'BOTH':
+                    leds.set_color("LEFT", color)
+                    leds.set_color("RIGHT", color)
+                else:
+                    leds.set_color(side, color)
+                vlog("LED set", {"color": color, "side": side})
+                self._send_json({"status": "ok"})
+
+            elif command == 'led_off':
+                leds.all_off()
+                vlog("LEDs turned off")
                 self._send_json({"status": "ok"})
 
             else:
-                log(f"Unknown command: {command}")
+                log("Unknown command: {0}".format(command))
                 self._send_json({"status": "error", "msg": "Unknown command"}, 400)
 
         except Exception as e:
-            log(f"Error processing command", str(e))
+            log("Error processing command", str(e))
             if VERBOSE:
-                import traceback
                 traceback.print_exc()
             self._send_json({"status": "error", "msg": str(e)}, 500)
 
     def do_GET(self):
         """Handle GET requests (sensor reads, status)"""
-        vlog(f"GET request", {"path": self.path})
+        vlog("GET request", {"path": self.path})
         
         try:
             # === ROOT STATUS ===
             if self.path == '/' or self.path == '/status':
                 status = {
                     "status": "ev3_bridge_active",
-                    "version": "2.0.0",
+                    "version": "2.1.0",
                     "uptime": time.time(),
                     "running_scripts": len(running_scripts),
                     "motors": list(motors.keys()),
@@ -380,32 +598,52 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             # === BATTERY ===
             elif self.path == '/battery':
                 voltage = power.measured_volts
+                current = power.measured_amps
                 # Approximate percentage (7.4V = 0%, 9.0V = 100%)
                 percentage = max(0, min(100, ((voltage - 7.4) / (9.0 - 7.4)) * 100))
-                vlog(f"Battery read", {"voltage": voltage, "percentage": percentage})
-                self._send_json({"value": percentage, "voltage": voltage})
+                vlog("Battery read", {"voltage": voltage, "percentage": percentage, "current": current})
+                self._send_json({
+                    "value": percentage, 
+                    "voltage": voltage, 
+                    "current": current
+                })
 
             # === MOTORS ===
             elif self.path.startswith('/motor/position/'):
                 port = self.path.split('/')[-1].upper()
                 m = get_motor(port)
                 value = m.position if m else 0
-                vlog(f"Motor position read", {"port": port, "position": value})
+                vlog("Motor position read", {"port": port, "position": value})
                 self._send_json({"value": value})
 
             elif self.path.startswith('/motor/speed/'):
                 port = self.path.split('/')[-1].upper()
                 m = get_motor(port)
                 value = m.speed if m else 0
-                vlog(f"Motor speed read", {"port": port, "speed": value})
+                vlog("Motor speed read", {"port": port, "speed": value})
                 self._send_json({"value": value})
+
+            elif self.path.startswith('/motor/state/'):
+                port = self.path.split('/')[-1].upper()
+                m = get_motor(port)
+                if m:
+                    state = {
+                        "position": m.position,
+                        "speed": m.speed,
+                        "is_running": m.is_running,
+                        "is_stalled": m.is_stalled
+                    }
+                    vlog("Motor state read", {"port": port, "state": state})
+                    self._send_json({"status": "ok", "state": state})
+                else:
+                    self._send_json({"status": "error", "msg": "Motor not connected"})
 
             # === TOUCH SENSOR ===
             elif self.path.startswith('/sensor/touch/'):
                 port = self.path.split('/')[-1]
                 sensor = get_sensor(port, TouchSensor)
                 value = sensor.is_pressed if sensor else False
-                vlog(f"Touch sensor read", {"port": port, "pressed": value})
+                vlog("Touch sensor read", {"port": port, "pressed": value})
                 self._send_json({"value": value})
 
             # === COLOR SENSOR ===
@@ -416,44 +654,72 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 
                 sensor = get_sensor(port, ColorSensor)
                 if sensor:
-                    if mode == 'reflected_light_intensity':
+                    if mode == 'reflected_light_intensity' or mode == 'reflected':
                         value = sensor.reflected_light_intensity
-                    elif mode == 'ambient_light_intensity':
+                    elif mode == 'ambient_light_intensity' or mode == 'ambient':
                         value = sensor.ambient_light_intensity
                     elif mode == 'color':
                         value = sensor.color
+                    elif mode == 'color_name':
+                        # Return color name instead of number
+                        color_names = {
+                            0: 'none',
+                            1: 'black',
+                            2: 'blue',
+                            3: 'green',
+                            4: 'yellow',
+                            5: 'red',
+                            6: 'white',
+                            7: 'brown'
+                        }
+                        value = color_names.get(sensor.color, 'unknown')
                     else:
                         value = 0
                 else:
                     value = 0
                 
-                vlog(f"Color sensor read", {"port": port, "mode": mode, "value": value})
+                vlog("Color sensor read", {"port": port, "mode": mode, "value": value})
                 self._send_json({"value": value})
 
             # === COLOR SENSOR RGB ===
             elif self.path.startswith('/sensor/color_rgb/'):
                 parts = self.path.split('/')
                 port = parts[3]
-                component = parts[4] if len(parts) > 4 else 'red'
+                component = parts[4] if len(parts) > 4 else 'all'
                 
                 sensor = get_sensor(port, ColorSensor)
                 if sensor:
                     rgb = sensor.rgb
-                    component_map = {'red': 0, 'green': 1, 'blue': 2}
-                    idx = component_map.get(component, 0)
-                    value = rgb[idx]
+                    if component == 'all':
+                        value = {"red": rgb[0], "green": rgb[1], "blue": rgb[2]}
+                    else:
+                        component_map = {'red': 0, 'green': 1, 'blue': 2}
+                        idx = component_map.get(component, 0)
+                        value = rgb[idx]
                 else:
-                    value = 0
+                    value = 0 if component != 'all' else {"red": 0, "green": 0, "blue": 0}
                 
-                vlog(f"Color RGB read", {"port": port, "component": component, "value": value})
+                vlog("Color RGB read", {"port": port, "component": component, "value": value})
                 self._send_json({"value": value})
 
             # === ULTRASONIC SENSOR ===
             elif self.path.startswith('/sensor/ultrasonic/'):
-                port = self.path.split('/')[-1]
+                parts = self.path.split('/')
+                port = parts[3]
+                mode = parts[4] if len(parts) > 4 else 'cm'
+                
                 sensor = get_sensor(port, UltrasonicSensor)
-                value = sensor.distance_centimeters if sensor else 0
-                vlog(f"Ultrasonic sensor read", {"port": port, "distance": value})
+                if sensor:
+                    if mode == 'cm' or mode == 'centimeters':
+                        value = sensor.distance_centimeters
+                    elif mode == 'in' or mode == 'inches':
+                        value = sensor.distance_inches
+                    else:
+                        value = sensor.distance_centimeters
+                else:
+                    value = 0
+                
+                vlog("Ultrasonic sensor read", {"port": port, "mode": mode, "distance": value})
                 self._send_json({"value": value})
 
             # === GYRO SENSOR ===
@@ -468,12 +734,14 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                         value = sensor.angle
                     elif mode == 'rate':
                         value = sensor.rate
+                    elif mode == 'both':
+                        value = {"angle": sensor.angle, "rate": sensor.rate}
                     else:
                         value = 0
                 else:
-                    value = 0
+                    value = 0 if mode != 'both' else {"angle": 0, "rate": 0}
                 
-                vlog(f"Gyro sensor read", {"port": port, "mode": mode, "value": value})
+                vlog("Gyro sensor read", {"port": port, "mode": mode, "value": value})
                 self._send_json({"value": value})
 
             # === INFRARED SENSOR ===
@@ -510,7 +778,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 else:
                     value = 0
                 
-                vlog(f"Infrared sensor read", {"port": port, "mode": mode, "value": value})
+                vlog("Infrared sensor read", {"port": port, "mode": mode, "value": value})
                 self._send_json({"value": value})
 
             # === BUTTONS ===
@@ -525,27 +793,51 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     'backspace': buttons.backspace
                 }
                 pressed = button_map.get(button_name, False)
-                vlog(f"Button read", {"button": button_name, "pressed": pressed})
+                vlog("Button read", {"button": button_name, "pressed": pressed})
                 self._send_json({"value": pressed})
+
+            elif self.path == '/buttons/all':
+                all_buttons = {
+                    'up': buttons.up,
+                    'down': buttons.down,
+                    'left': buttons.left,
+                    'right': buttons.right,
+                    'enter': buttons.enter,
+                    'backspace': buttons.backspace
+                }
+                vlog("All buttons read", all_buttons)
+                self._send_json({"value": all_buttons})
 
             else:
                 self._send_json({"status": "error", "msg": "Unknown endpoint"}, 404)
 
         except Exception as e:
-            log(f"Error processing GET", str(e))
+            log("Error processing GET", str(e))
             if VERBOSE:
-                import traceback
                 traceback.print_exc()
             self._send_json({"status": "error", "msg": str(e)}, 500)
 
 def run_server():
     """Start HTTP server"""
     server = socketserver.TCPServer(("", PORT), BridgeHandler)
-    log(f"Bridge server listening on port {PORT}")
-    log(f"Verbose logging: {'ENABLED' if VERBOSE else 'DISABLED'}")
-    log(f"Scripts directory: {SCRIPTS_DIR}")
-    log(f"Sounds directory: {SOUNDS_DIR}")
-    server.serve_forever()
+    server.allow_reuse_address = True
+    log("=" * 50)
+    log("EV3 Bridge Server v2.1 Started")
+    log("=" * 50)
+    log("Listening on port {0}".format(PORT))
+    log("Verbose logging: {0}".format('ENABLED' if VERBOSE else 'DISABLED'))
+    log("Scripts directory: {0}".format(SCRIPTS_DIR))
+    log("Sounds directory: {0}".format(SOUNDS_DIR))
+    log("=" * 50)
+    
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        log("Server interrupted")
+    finally:
+        server.shutdown()
+        server.server_close()
+        log("Server stopped")
 
 def ui_loop():
     """Display UI on EV3 screen"""
@@ -556,73 +848,87 @@ def ui_loop():
         current_time = time.time()
         
         if current_time - last_update >= update_interval:
-            display.clear()
-            
-            # Title
-            display.text_pixels("EV3 BRIDGE v2.0", x=10, y=5)
-            display.text_pixels("-" * 20, x=10, y=20)
-            
-            # Status
-            display.text_pixels(f"Port: {PORT}", x=10, y=35)
-            display.text_pixels(f"Scripts: {len(running_scripts)}", x=10, y=50)
-            
-            # Motor status
-            y = 65
-            for port, motor in motors.items():
-                if motor:
-                    display.text_pixels(f"M{port}: {motor.position}", x=10, y=y)
-                    y += 15
-                    if y > 110:
-                        break
-            
-            # Sensors
-            sensor_count = len([s for s in sensors.values() if s is not None])
-            if sensor_count > 0:
-                display.text_pixels(f"Sensors: {sensor_count}", x=10, y=95)
-            
-            # Instructions
-            display.text_pixels("Press BACK to exit", x=10, y=115)
-            
-            display.update()
-            last_update = current_time
+            try:
+                display.clear()
+                
+                # Title
+                display.text_pixels("EV3 BRIDGE v2.1", x=10, y=5)
+                display.text_pixels("-" * 20, x=10, y=20)
+                
+                # Status
+                display.text_pixels("Port: {0}".format(PORT), x=10, y=35)
+                display.text_pixels("Scripts: {0}".format(len(running_scripts)), x=10, y=50)
+                
+                # Motor status
+                y = 65
+                for port, motor in motors.items():
+                    if motor:
+                        display.text_pixels("M{0}: {1}".format(port, motor.position), x=10, y=y)
+                        y += 15
+                        if y > 110:
+                            break
+                
+                # Sensors
+                sensor_count = len([s for s in sensors.values() if s is not None])
+                if sensor_count > 0:
+                    display.text_pixels("Sensors: {0}".format(sensor_count), x=10, y=95)
+                
+                # Battery
+                voltage = power.measured_volts
+                display.text_pixels("Bat: {0:.1f}V".format(voltage), x=10, y=110)
+                
+                # Instructions
+                display.text_pixels("Press BACK to exit", x=5, y=120)
+                
+                display.update()
+                last_update = current_time
+                
+            except Exception as e:
+                log("UI update error", str(e))
+                if VERBOSE:
+                    traceback.print_exc()
         
         # Check for exit button
-        if buttons.backspace:
-            log("Backspace pressed - exiting")
-            display.clear()
-            display.text_pixels("Shutting down...", x=30, y=60)
-            display.update()
-            time.sleep(1)
-            sys.exit(0)
+        try:
+            if buttons.backspace:
+                log("Backspace pressed - exiting")
+                display.clear()
+                display.text_pixels("Shutting down...", x=30, y=60)
+                display.update()
+                time.sleep(1)
+                sys.exit(0)
+        except Exception as e:
+            log("Button check error", str(e))
         
         time.sleep(0.1)
 
 def main():
     """Main entry point"""
-    global VERBOSE
+    global VERBOSE, PORT
     
-    parser = argparse.ArgumentParser(description='EV3 Bridge Server v2.0')
+    parser = argparse.ArgumentParser(description='EV3 Bridge Server v2.1')
     parser.add_argument('--port', type=int, default=8080, help='HTTP server port (default: 8080)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose debug logging')
     parser.add_argument('--no-ui', action='store_true', help='Disable LCD UI (headless mode)')
     
     args = parser.parse_args()
     
-    global PORT
     PORT = args.port
     VERBOSE = args.verbose
     
     # Banner
     print("=" * 50)
-    print("EV3 BRIDGE SERVER v2.0")
+    print("EV3 BRIDGE SERVER v2.1")
+    print("Python 3.5.3 Compatible")
     print("=" * 50)
-    print(f"Port: {PORT}")
-    print(f"Verbose: {VERBOSE}")
-    print(f"UI: {'Disabled' if args.no_ui else 'Enabled'}")
+    print("Port: {0}".format(PORT))
+    print("Verbose: {0}".format(VERBOSE))
+    print("UI: {0}".format('Disabled' if args.no_ui else 'Enabled'))
     print("=" * 50)
     
     # Start server in background thread
-    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
     server_thread.start()
     
     if args.no_ui:
@@ -635,7 +941,14 @@ def main():
             log("Interrupted - shutting down")
     else:
         # Run UI loop in main thread
-        ui_loop()
+        try:
+            ui_loop()
+        except KeyboardInterrupt:
+            log("Interrupted - shutting down")
+        except Exception as e:
+            log("Fatal error in UI loop", str(e))
+            if VERBOSE:
+                traceback.print_exc()
 
 if __name__ == "__main__":
     main()
