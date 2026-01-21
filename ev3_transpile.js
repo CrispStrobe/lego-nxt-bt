@@ -1229,13 +1229,11 @@
         return;
       }
 
-      // FIX: Actually USE the url variable we build!
       const url = `${this.ev3Protocol}://${this.ev3IP}:${this.ev3Port}/`;
       this.log("Sending command", { cmd, params, url });
 
       try {
         const response = await fetch(url, {
-          // ← USE url HERE!
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cmd, ...params }),

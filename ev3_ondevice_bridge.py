@@ -234,6 +234,9 @@ class ScriptManager:
         """Run a script by name"""
         global script_counter
 
+        if not script_name.endswith('.py') or '/' in script_name or '..' in script_name:
+            return None
+
         script_path = os.path.join(self.scripts_dir, script_name)
 
         if not os.path.exists(script_path):
@@ -245,17 +248,20 @@ class ScriptManager:
                 ["python3", script_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                # stdout=subprocess.DEVNULL,  # Or log to file
+                # stderr=subprocess.DEVNULL,
                 stdin=subprocess.PIPE,
             )
 
             script_id = script_counter
             script_counter += 1
 
-            running_scripts[script_id] = {
-                "name": script_name,
-                "process": proc,
-                "started": time.time(),
-            }
+            with script_list_lock:
+                running_scripts[script_id] = {
+                    "name": script_name,
+                    "process": proc,
+                    "started": time.time(),
+                }
 
             log("Script started", {"name": script_name, "id": script_id})
 
@@ -307,6 +313,9 @@ class ScriptManager:
 
     def delete_script(self, script_name):
         """Delete a script file"""
+        if not script_name.endswith('.py') or '/' in script_name or '..' in script_name:
+            return None
+
         script_path = os.path.join(self.scripts_dir, script_name)
 
         if not os.path.exists(script_path):
