@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 """
-ev3_ondevice_bridge.py
-Complete EV3 Bridge Server v2.2 with Integrated Script Manager
+ev3_ondevice_bridge_old.py
+Complete EV3 Bridge Server v2.1
+Runs on EV3 Brick - Provides HTTP API for both streaming control and script management
+Python 3.5.3 compatible
 """
 
 import http.server
@@ -19,7 +21,7 @@ import traceback
 import signal
 from datetime import datetime
 import ssl
-from pathlib import Path
+import subprocess
 
 # EV3 imports
 from ev3dev2.motor import (
@@ -30,10 +32,6 @@ from ev3dev2.motor import (
     OUTPUT_C,
     OUTPUT_D,
     SpeedPercent,
-    ServoMotor,
-    DcMotor,
-    MoveTank,
-    MoveSteering,
 )
 from ev3dev2.sensor import INPUT_1, INPUT_2, INPUT_3, INPUT_4
 from ev3dev2.sensor.lego import (
@@ -52,65 +50,13 @@ from ev3dev2.led import Leds
 from ev3dev2.power import PowerSupply
 
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-PORT = 8080
-SCRIPTS_DIR = "/home/robot/scripts"
-SOUNDS_DIR = "/home/robot/sounds"
-
-USE_SSL = False
-SSL_CERT = "ev3.crt"
-SSL_KEY = "ev3.key"
-
-VERBOSE = False
-
-# Ensure directories exist
-os.makedirs(SCRIPTS_DIR, exist_ok=True)
-os.makedirs(SOUNDS_DIR, exist_ok=True)
-
-# ============================================================================
-# GLOBAL STATE
-# ============================================================================
-
-# Hardware Cache
-motors = {}
-sensors = {}
-display = Display()
-sound = Sound()
-buttons = Button()
-leds = Leds()
-power = PowerSupply()
-
-# Script management
-running_scripts = {}
-script_counter = 0
-script_list = []  # List of available scripts
-script_list_lock = threading.Lock()
-current_menu_index = 0
-menu_scroll_offset = 0
-
-# UI Mode
-ui_mode = "status"  # "status" or "scripts"
-
-# ============================================================================
-# SIGNAL HANDLERS
-# ============================================================================
-
-
 def signal_handler(sig, frame):
     """Handle Ctrl+C and termination signals"""
+    global stop_all
     print("\nStopping all scripts...")
+    stop_all = True
 
-    # Stop all running scripts
-    for script_id, script_info in list(running_scripts.items()):
-        try:
-            script_info["process"].terminate()
-        except:
-            pass
-
-    # Stop all motors
+    # Stop all motors immediately
     try:
         for motor in list(motors.values()):
             if motor:
@@ -121,17 +67,43 @@ def signal_handler(sig, frame):
     except:
         pass
 
+    # Clean exit
     print("Shutdown complete")
     os._exit(0)
 
 
+# Register signal handlers
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+# Configuration
+PORT = 8080
+SCRIPTS_DIR = "/home/robot/scripts"
+SOUNDS_DIR = "/home/robot/sounds"
 
-# ============================================================================
-# LOGGING
-# ============================================================================
+USE_SSL = False
+SSL_CERT = "ev3.crt"
+SSL_KEY = "ev3.key"
+
+# Ensure directories exist
+os.makedirs(SCRIPTS_DIR, exist_ok=True)
+os.makedirs(SOUNDS_DIR, exist_ok=True)
+
+# Global verbose flag
+VERBOSE = False
+
+# Hardware Cache
+motors = {}
+sensors = {}
+display = Display()
+sound = Sound()
+buttons = Button()
+leds = Leds()
+power = PowerSupply()
+
+# Running scripts tracking
+running_scripts = {}
+script_counter = 0
 
 
 def vlog(message, data=None):
@@ -153,222 +125,55 @@ def log(message, data=None):
         print("[{0}] {1}".format(timestamp, message))
 
 
-# ============================================================================
-# SCRIPT MANAGER
-# ============================================================================
-
-
-class ScriptManager:
-    """Manages scripts in the scripts directory"""
-
-    def __init__(self, scripts_dir):
-        self.scripts_dir = scripts_dir
-        self.last_scan = 0
-        self.scan_interval = 2.0  # Scan every 2 seconds
-
-    def scan_scripts(self):
-        """Scan scripts directory and return list of .py files"""
-        global script_list
-
-        current_time = time.time()
-
-        # Only scan if interval has passed
-        if current_time - self.last_scan < self.scan_interval:
-            return script_list
-
-        self.last_scan = current_time
-
-        try:
-            # Get all .py files
-            py_files = sorted(
-                [
-                    f
-                    for f in os.listdir(self.scripts_dir)
-                    if f.endswith(".py")
-                    and os.path.isfile(os.path.join(self.scripts_dir, f))
-                ]
-            )
-
-            # Update global list with lock
-            with script_list_lock:
-                old_count = len(script_list)
-                script_list = py_files
-                new_count = len(script_list)
-
-                if new_count != old_count:
-                    log("Script list updated", {"count": new_count})
-
-            # Ensure all scripts are executable
-            for script in py_files:
-                script_path = os.path.join(self.scripts_dir, script)
-                self._ensure_executable(script_path)
-
-            return script_list
-
-        except Exception as e:
-            log("Script scan error", str(e))
-            if VERBOSE:
-                traceback.print_exc()
-            return []
-
-    def _ensure_executable(self, script_path):
-        """Ensure script has proper shebang and is executable"""
-        try:
-            # Check if file has shebang
-            with open(script_path, "r") as f:
-                first_line = f.readline()
-                if not first_line.startswith("#!"):
-                    # Add shebang at the beginning
-                    content = f.read()
-                    with open(script_path, "w") as fw:
-                        fw.write("#!/usr/bin/env python3\n" + first_line + content)
-                    log("Added shebang to", script_path)
-
-            # Make executable
-            os.chmod(script_path, 0o755)
-
-        except Exception as e:
-            vlog("Could not make script executable", str(e))
-
-    def run_script(self, script_name):
-        """Run a script by name"""
-        global script_counter
-
-        script_path = os.path.join(self.scripts_dir, script_name)
-
-        if not os.path.exists(script_path):
-            return None
-
-        try:
-            # Start process
-            proc = subprocess.Popen(
-                ["python3", script_path],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-            )
-
-            script_id = script_counter
-            script_counter += 1
-
-            running_scripts[script_id] = {
-                "name": script_name,
-                "process": proc,
-                "started": time.time(),
-            }
-
-            log("Script started", {"name": script_name, "id": script_id})
-
-            # Play start sound
-            try:
-                sound.beep()
-            except:
-                pass
-
-            return script_id
-
-        except Exception as e:
-            log("Script start failed", str(e))
-            if VERBOSE:
-                traceback.print_exc()
-            return None
-
-    def stop_script(self, script_id):
-        """Stop a running script"""
-        if script_id not in running_scripts:
-            return False
-
-        try:
-            running_scripts[script_id]["process"].terminate()
-            # Wait briefly for termination
-            running_scripts[script_id]["process"].wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            # Force kill if timeout
-            running_scripts[script_id]["process"].kill()
-        except Exception as e:
-            log("Script stop error", str(e))
-
-        del running_scripts[script_id]
-        log("Script stopped", {"id": script_id})
-
-        # Play stop sound
-        try:
-            sound.tone([(400, 100)])
-        except:
-            pass
-
-        return True
-
-    def stop_all_scripts(self):
-        """Stop all running scripts"""
-        for script_id in list(running_scripts.keys()):
-            self.stop_script(script_id)
-        log("All scripts stopped")
-
-    def delete_script(self, script_name):
-        """Delete a script file"""
-        script_path = os.path.join(self.scripts_dir, script_name)
-
-        if not os.path.exists(script_path):
-            return False
-
-        try:
-            # Stop any running instances first
-            for script_id, info in list(running_scripts.items()):
-                if info["name"] == script_name:
-                    self.stop_script(script_id)
-
-            # Delete file
-            os.remove(script_path)
-            log("Script deleted", script_name)
-
-            # Update script list
-            self.scan_scripts()
-
-            return True
-
-        except Exception as e:
-            log("Script delete error", str(e))
-            return False
-
-
-# Initialize script manager
-script_manager = ScriptManager(SCRIPTS_DIR)
-
-# ============================================================================
-# MOTOR & SENSOR HELPERS
-# ============================================================================
-
-
 def get_motor(port_char):
-    """Lazy load motors with disconnect protection"""
+    """Lazy load motors with disconnect protection and optimization"""
     vlog("get_motor called", {"port": port_char})
 
+    # Check if motor exists in cache
     if port_char in motors:
         motor = motors[port_char]
         if motor:
+            # Verify motor is still connected
             try:
-                _ = motor.is_running
+                _ = motor.is_running  # Quick connectivity check
                 return motor
-            except:
-                log("Motor {0} disconnected".format(port_char))
+            except Exception as e:
+                log("Motor {0} disconnected".format(port_char), str(e))
                 motors[port_char] = None
+                # Fall through to re-initialization
 
+    # Initialize new motor
     try:
         mapping = {"A": OUTPUT_A, "B": OUTPUT_B, "C": OUTPUT_C, "D": OUTPUT_D}
 
+        # Try LargeMotor first (most common)
         try:
             motors[port_char] = LargeMotor(mapping[port_char])
             log("Large motor initialized on port {0}".format(port_char))
         except:
+            # Try MediumMotor as fallback
             try:
                 motors[port_char] = MediumMotor(mapping[port_char])
                 log("Medium motor initialized on port {0}".format(port_char))
             except:
+                log("No motor found on port {0}".format(port_char))
                 motors[port_char] = None
                 return None
+
+        vlog(
+            "Motor details",
+            {
+                "port": port_char,
+                "driver": motors[port_char].driver_name,
+                "address": motors[port_char].address,
+                "type": motors[port_char].__class__.__name__,
+            },
+        )
+
     except Exception as e:
-        log("Motor init failed", str(e))
+        log("Failed to initialize motor on port {0}".format(port_char), str(e))
+        if VERBOSE:
+            traceback.print_exc()
         motors[port_char] = None
 
     return motors[port_char]
@@ -383,6 +188,14 @@ def get_medium_motor(port_char):
             mapping = {"A": OUTPUT_A, "B": OUTPUT_B, "C": OUTPUT_C, "D": OUTPUT_D}
             motors[key] = MediumMotor(mapping[port_char])
             log("Medium motor initialized on port {0}".format(port_char))
+            vlog(
+                "Medium motor details",
+                {
+                    "port": port_char,
+                    "driver": motors[key].driver_name,
+                    "address": motors[key].address,
+                },
+            )
         except Exception as e:
             log(
                 "Failed to initialize medium motor on port {0}".format(port_char),
@@ -390,34 +203,6 @@ def get_medium_motor(port_char):
             )
             if VERBOSE:
                 traceback.print_exc()
-            motors[key] = None
-    return motors[key]
-
-
-def get_servo_motor(port_char):
-    """Lazy load servo motors"""
-    key = "SERVO_" + port_char
-    if key not in motors:
-        try:
-            mapping = {"A": OUTPUT_A, "B": OUTPUT_B, "C": OUTPUT_C, "D": OUTPUT_D}
-            motors[key] = ServoMotor(mapping[port_char])
-            log("Servo motor initialized on port {0}".format(port_char))
-        except Exception as e:
-            log("Servo motor init failed", str(e))
-            motors[key] = None
-    return motors[key]
-
-
-def get_dc_motor(port_char):
-    """Lazy load DC motors"""
-    key = "DC_" + port_char
-    if key not in motors:
-        try:
-            mapping = {"A": OUTPUT_A, "B": OUTPUT_B, "C": OUTPUT_C, "D": OUTPUT_D}
-            motors[key] = DcMotor(mapping[port_char])
-            log("DC motor initialized on port {0}".format(port_char))
-        except Exception as e:
-            log("DC motor init failed", str(e))
             motors[key] = None
     return motors[key]
 
@@ -446,21 +231,32 @@ def get_sensor(port, sensor_type):
             if sensor_type == "touch":
                 sensor.mode = "TOUCH"
             elif sensor_type == "color":
-                sensor.mode = "COL-REFLECT"  # Default mode
+                sensor.mode = "COL-REFLECT"  # Default to reflected light
             elif sensor_type == "ultrasonic":
                 sensor.mode = "US-DIST-CM"
             elif sensor_type == "gyro":
                 sensor.mode = "GYRO-ANG"
             elif sensor_type == "infrared":
                 sensor.mode = "IR-PROX"
-            elif sensor_type == "sound":
-                sensor.mode = "DB"  # Decibels mode
-            elif sensor_type == "light":
-                sensor.mode = "REFLECT"  # Reflected light mode
 
             log("Initialized {0} sensor on port {1}".format(sensor_type, port))
+            vlog(
+                "Sensor details",
+                {
+                    "port": port,
+                    "type": sensor_type,
+                    "driver": sensors[key].driver_name,
+                    "address": sensors[key].address,
+                    "mode": sensors[key].mode,
+                },
+            )
         except Exception as e:
-            log("Sensor init failed", str(e))
+            log(
+                "Failed to initialize {0} sensor on port {1}".format(sensor_type, port),
+                str(e),
+            )
+            if VERBOSE:
+                traceback.print_exc()
             sensors[key] = None
     return sensors[key]
 
@@ -484,14 +280,10 @@ def safe_motor_command(motor, command_func, error_msg="Motor operation failed"):
         return False
 
 
-# ============================================================================
-# HTTP HANDLER (keep existing + add script management endpoints)
-# ============================================================================
-
-
 class BridgeHandler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
+        """Override to ALWAYS log requests for debugging"""
         log(
             "HTTP {0} {1} from {2}".format(
                 self.command, self.path, self.client_address[0]
@@ -499,7 +291,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
         )
 
     def _send_json(self, data, code=200):
-        """Send JSON response"""
+        """Send JSON response - ENHANCED CORS"""
         vlog("Sending response", {"code": code, "data": data})
         self.send_response(code)
         self.send_header("Content-type", "application/json")
@@ -508,21 +300,28 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"
         )
         self.send_header("Access-Control-Allow-Headers", "*")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
 
     def do_OPTIONS(self):
-        """Handle CORS preflight"""
+        """Handle CORS preflight - ENHANCED"""
+        vlog("CORS preflight request")
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header(
             "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"
         )
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-Requested-With",
+        )
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_POST(self):
-        """Handle POST requests"""
+        """Handle POST requests (commands)"""
         content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
 
@@ -530,31 +329,19 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             data = json.loads(post_data.decode("utf-8"))
             command = data.get("cmd")
 
-            log("Command: {0}".format(command))
+            log("Command received: {0}".format(command))
+            vlog("Command data", data)
 
-            # === SCRIPT MANAGEMENT ===
+            # === UPLOAD HANDLING ===
             if command == "upload_script":
-                filename = data["name"]
-                code = data["code"]
-
-                filepath = os.path.join(SCRIPTS_DIR, filename)
-
-                # Write script
-                with open(filepath, "w") as f:
-                    # Ensure shebang
-                    if not code.startswith("#!"):
-                        f.write("#!/usr/bin/env python3\n")
-                    f.write(code)
-
-                # Make executable
-                os.chmod(filepath, 0o755)
-
-                log("Script uploaded", filename)
-
-                # Trigger script list update
-                script_manager.scan_scripts()
-
-                self._send_json({"status": "ok", "msg": "Script uploaded"})
+                filename = os.path.join(SCRIPTS_DIR, data["name"])
+                with open(filename, "w") as f:
+                    f.write(data["code"])
+                os.chmod(filename, 0o755)
+                log("Script uploaded: {0}".format(data["name"]))
+                self._send_json(
+                    {"status": "ok", "msg": "Saved {0}".format(data["name"])}
+                )
 
             elif command == "upload_sound":
                 filename = os.path.join(SOUNDS_DIR, data["name"])
@@ -566,46 +353,69 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     log("Sound uploaded: {0}".format(data["name"]))
                     self._send_json({"status": "ok", "msg": "Sound uploaded"})
                 else:
-                    self._send_json({"status": "error", "msg": "No sound data"})
+                    self._send_json({"status": "error", "msg": "No sound data"}, 400)
 
+            # === SCRIPT EXECUTION ===
             elif command == "run_script":
-                script_name = data["name"]
-                script_id = script_manager.run_script(script_name)
-
-                if script_id is not None:
+                path = os.path.join(SCRIPTS_DIR, data["name"])
+                if os.path.exists(path):
+                    global script_counter
+                    script_id = script_counter
+                    script_counter += 1
+                    proc = subprocess.Popen(["python3", path])
+                    running_scripts[script_id] = {
+                        "name": data["name"],
+                        "process": proc,
+                        "started": time.time(),
+                    }
+                    log("Script started: {0} (ID: {1})".format(data["name"], script_id))
                     self._send_json(
-                        {
-                            "status": "ok",
-                            "script_id": script_id,
-                            "msg": "Script started",
-                        }
+                        {"status": "ok", "msg": "Started", "script_id": script_id}
                     )
                 else:
-                    self._send_json({"status": "error", "msg": "Failed to start"}, 500)
+                    self._send_json({"status": "error", "msg": "File not found"}, 404)
 
             elif command == "stop_script":
                 script_id = data.get("script_id")
-                if script_manager.stop_script(script_id):
-                    self._send_json({"status": "ok", "msg": "Script stopped"})
+                if script_id in running_scripts:
+                    running_scripts[script_id]["process"].terminate()
+                    del running_scripts[script_id]
+                    log("Script stopped (ID: {0})".format(script_id))
+                    self._send_json({"status": "ok", "msg": "Stopped"})
                 else:
                     self._send_json({"status": "error", "msg": "Script not found"}, 404)
 
-            elif command == "stop_all_scripts":
-                script_manager.stop_all_scripts()
-                self._send_json({"status": "ok", "msg": "All scripts stopped"})
+            elif command == "list_scripts":
+                try:
+                    scripts = [f for f in os.listdir(SCRIPTS_DIR) if f.endswith(".py")]
+                    vlog("Listing scripts", {"count": len(scripts)})
+                    self._send_json({"status": "ok", "scripts": scripts})
+                except Exception as e:
+                    self._send_json({"status": "error", "msg": str(e)}, 500)
 
             elif command == "delete_script":
-                script_name = data["name"]
-                if script_manager.delete_script(script_name):
-                    self._send_json({"status": "ok", "msg": "Script deleted"})
-                else:
-                    self._send_json({"status": "error", "msg": "Delete failed"}, 500)
+                try:
+                    filename = os.path.join(SCRIPTS_DIR, data["name"])
+                    if os.path.exists(filename):
+                        os.remove(filename)
+                        log("Script deleted: {0}".format(data["name"]))
+                        self._send_json({"status": "ok", "msg": "Deleted"})
+                    else:
+                        self._send_json(
+                            {"status": "error", "msg": "File not found"}, 404
+                        )
+                except Exception as e:
+                    self._send_json({"status": "error", "msg": str(e)}, 500)
 
             # === MOTORS ===
             elif command == "motor_run":
                 m = get_motor(data["port"])
-                if m:
-                    m.on(SpeedPercent(data["speed"]))
+                if safe_motor_command(
+                    m, lambda: m.on(SpeedPercent(data["speed"])), "Motor run failed"
+                ):
+                    vlog(
+                        "Motor running", {"port": data["port"], "speed": data["speed"]}
+                    )
                     self._send_json({"status": "ok"})
                 else:
                     self._send_json({"status": "error", "msg": "Motor not connected"})
@@ -759,117 +569,6 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     vlog("All motors stopped")
                     self._send_json({"status": "ok"})
                 except Exception as e:
-                    self._send_json({"status": "error", "msg": str(e)})
-
-            # === SERVO MOTOR ===
-            elif command == "servo_run":
-                m = get_servo_motor(data["port"])
-                if m:
-                    m.on(SpeedPercent(data["speed"]))
-                    self._send_json({"status": "ok"})
-                else:
-                    self._send_json({"status": "error", "msg": "Servo not connected"})
-
-            elif command == "servo_run_to_position":
-                m = get_servo_motor(data["port"])
-                if m:
-                    m.run_to_abs_pos(
-                        position_sp=data["position"],
-                        speed_sp=SpeedPercent(data.get("speed", 50)),
-                    )
-                    self._send_json({"status": "ok"})
-                else:
-                    self._send_json({"status": "error", "msg": "Servo not connected"})
-
-            elif command == "servo_stop":
-                m = get_servo_motor(data["port"])
-                if m:
-                    m.stop()
-                    self._send_json({"status": "ok"})
-                else:
-                    self._send_json({"status": "error", "msg": "Servo not connected"})
-
-            # === DC MOTOR ===
-            elif command == "dc_motor_run":
-                m = get_dc_motor(data["port"])
-                if m:
-                    m.on(SpeedPercent(data["speed"]))
-                    self._send_json({"status": "ok"})
-                else:
-                    self._send_json(
-                        {"status": "error", "msg": "DC motor not connected"}
-                    )
-
-            elif command == "dc_motor_stop":
-                m = get_dc_motor(data["port"])
-                if m:
-                    m.stop()
-                    self._send_json({"status": "ok"})
-                else:
-                    self._send_json(
-                        {"status": "error", "msg": "DC motor not connected"}
-                    )
-
-            # === MOVE TANK (High-level tank driving) ===
-            elif command == "move_tank":
-                # MoveTank makes tank driving easier
-                try:
-                    tank = MoveTank(
-                        data.get("left_port", "B"), data.get("right_port", "C")
-                    )
-
-                    if "rotations" in data:
-                        tank.on_for_rotations(
-                            SpeedPercent(data["left_speed"]),
-                            SpeedPercent(data["right_speed"]),
-                            data["rotations"],
-                        )
-                    elif "seconds" in data:
-                        tank.on_for_seconds(
-                            SpeedPercent(data["left_speed"]),
-                            SpeedPercent(data["right_speed"]),
-                            data["seconds"],
-                        )
-                    else:
-                        tank.on(
-                            SpeedPercent(data["left_speed"]),
-                            SpeedPercent(data["right_speed"]),
-                        )
-
-                    self._send_json({"status": "ok"})
-                except Exception as e:
-                    log("MoveTank failed", str(e))
-                    self._send_json({"status": "error", "msg": str(e)})
-
-            # === MOVE STEERING (High-level steering) ===
-            elif command == "move_steering":
-                # MoveSteering for car-like steering
-                try:
-                    steering = MoveSteering(
-                        data.get("left_port", "B"), data.get("right_port", "C")
-                    )
-
-                    # Steering: -100 (full left) to 100 (full right)
-                    # Speed: motor speed
-
-                    if "rotations" in data:
-                        steering.on_for_rotations(
-                            data["steering"],
-                            SpeedPercent(data["speed"]),
-                            data["rotations"],
-                        )
-                    elif "seconds" in data:
-                        steering.on_for_seconds(
-                            data["steering"],
-                            SpeedPercent(data["speed"]),
-                            data["seconds"],
-                        )
-                    else:
-                        steering.on(data["steering"], SpeedPercent(data["speed"]))
-
-                    self._send_json({"status": "ok"})
-                except Exception as e:
-                    log("MoveSteering failed", str(e))
                     self._send_json({"status": "error", "msg": str(e)})
 
             # === DISPLAY ===
@@ -1202,39 +901,21 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"status": "error", "msg": str(e)}, 500)
 
     def do_GET(self):
-        """Handle GET requests (sensor reads, status etc)"""
+        """Handle GET requests (sensor reads, status)"""
         vlog("GET request", {"path": self.path})
 
         try:
-            # Status
+            # === ROOT STATUS ===
             if self.path == "/" or self.path == "/status":
                 status = {
                     "status": "ev3_bridge_active",
-                    "version": "2.2.0",
+                    "version": "2.1.0",
+                    "uptime": time.time(),
                     "running_scripts": len(running_scripts),
-                    "available_scripts": len(script_list),
                     "motors": list(motors.keys()),
                     "sensors": list(sensors.keys()),
                 }
                 self._send_json(status)
-
-            # List scripts
-            elif self.path == "/scripts":
-                scripts = script_manager.scan_scripts()
-                self._send_json(
-                    {
-                        "status": "ok",
-                        "scripts": scripts,
-                        "running": [
-                            {
-                                "id": sid,
-                                "name": info["name"],
-                                "runtime": time.time() - info["started"],
-                            }
-                            for sid, info in running_scripts.items()
-                        ],
-                    }
-                )
 
             # === BATTERY ===
             elif self.path == "/battery":
@@ -1423,56 +1104,6 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 )
                 self._send_json({"value": value})
 
-            # === NXT SOUND SENSOR ===
-            elif self.path.startswith("/sensor/sound/"):
-                parts = self.path.split("/")
-                port = parts[3]
-                mode = parts[4] if len(parts) > 4 else "db"  # db or dba
-
-                sensor = get_sensor(port, "sound")
-
-                if not sensor:
-                    self._send_json({"value": 0})
-                    return
-
-                if mode == "db":
-                    # Set mode to DB (decibels)
-                    sensor.mode = "DB"
-                    value = sensor.sound_pressure
-                elif mode == "dba":
-                    # Set mode to DBA (A-weighted decibels)
-                    sensor.mode = "DBA"
-                    value = sensor.sound_pressure_low
-                else:
-                    value = 0
-
-                vlog("Sound sensor read", {"port": port, "mode": mode, "value": value})
-                self._send_json({"value": value})
-
-            # === NXT LIGHT SENSOR ===
-            elif self.path.startswith("/sensor/light/"):
-                parts = self.path.split("/")
-                port = parts[3]
-                mode = parts[4] if len(parts) > 4 else "reflect"  # reflect or ambient
-
-                sensor = get_sensor(port, "light")
-
-                if not sensor:
-                    self._send_json({"value": 0})
-                    return
-
-                if mode == "reflect":
-                    sensor.mode = "REFLECT"
-                    value = sensor.reflected_light_intensity
-                elif mode == "ambient":
-                    sensor.mode = "AMBIENT"
-                    value = sensor.ambient_light_intensity
-                else:
-                    value = 0
-
-                vlog("Light sensor read", {"port": port, "mode": mode, "value": value})
-                self._send_json({"value": value})
-
             # === BUTTONS ===
             elif self.path.startswith("/button/"):
                 button_name = self.path.split("/")[-1]
@@ -1510,310 +1141,222 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"status": "error", "msg": str(e)}, 500)
 
 
-# ============================================================================
-# EV3 UI WITH SCRIPT MENU
-# ============================================================================
-
-
-def draw_script_menu():
-    """Draw the script selection menu"""
-    global current_menu_index, menu_scroll_offset
-
-    display.clear()
-
-    # Title
-    display.text_pixels("SCRIPT MENU", x=30, y=2, font="Lat15-Terminus12x6")
-    display.text_pixels("=" * 26, x=2, y=15)
-
-    # Get current scripts
-    scripts = script_manager.scan_scripts()
-
-    if not scripts:
-        display.text_pixels("No scripts found", x=20, y=50)
-        display.text_pixels("Upload via web", x=20, y=65)
-        display.update()
-        return
-
-    # Calculate visible range (show 5 scripts at a time)
-    max_visible = 5
-    total_scripts = len(scripts)
-
-    # Adjust scroll offset if needed
-    if current_menu_index < menu_scroll_offset:
-        menu_scroll_offset = current_menu_index
-    elif current_menu_index >= menu_scroll_offset + max_visible:
-        menu_scroll_offset = current_menu_index - max_visible + 1
-
-    # Draw visible scripts
-    y = 25
-    for i in range(
-        menu_scroll_offset, min(menu_scroll_offset + max_visible, total_scripts)
-    ):
-        script_name = scripts[i]
-
-        # Truncate long names
-        if len(script_name) > 20:
-            display_name = script_name[:17] + "..."
-        else:
-            display_name = script_name
-
-        # Highlight selected
-        if i == current_menu_index:
-            display.text_pixels(
-                "> " + display_name, x=5, y=y, font="Lat15-Terminus12x6"
-            )
-        else:
-            display.text_pixels(
-                "  " + display_name, x=5, y=y, font="Lat15-Terminus12x6"
-            )
-
-        y += 15
-
-    # Scroll indicator
-    if menu_scroll_offset > 0:
-        display.text_pixels("^", x=170, y=25)
-    if menu_scroll_offset + max_visible < total_scripts:
-        display.text_pixels("v", x=170, y=100)
-
-    # Footer
-    display.text_pixels("-" * 26, x=2, y=110)
-    display.text_pixels("ENTER=Run  BACK=Exit", x=5, y=118, font="helvB08")
-
-    display.update()
-
-
-def draw_status_screen():
-    """Draw the main status screen"""
-    display.clear()
-
-    # Title
-    display.text_pixels("EV3 BRIDGE v2.2", x=15, y=2, font="Lat15-Terminus12x6")
-    display.text_pixels("=" * 26, x=2, y=15)
-
-    # Connection info
-    display.text_pixels("Port: {0}".format(PORT), x=5, y=25)
-    display.text_pixels("Scripts: {0}".format(len(script_list)), x=5, y=40)
-    display.text_pixels("Running: {0}".format(len(running_scripts)), x=5, y=55)
-
-    # Show running script names
-    if running_scripts:
-        y = 70
-        for script_id, info in list(running_scripts.items())[:2]:  # Show max 2
-            name = info["name"]
-            if len(name) > 18:
-                name = name[:15] + "..."
-            display.text_pixels("* " + name, x=5, y=y, font="helvR08")
-            y += 12
-
-    # Battery
-    try:
-        voltage = power.measured_volts
-        percentage = max(0, min(100, ((voltage - 7.4) / (9.0 - 7.4)) * 100))
-        display.text_pixels(
-            "Battery: {0:.1f}V ({1:.0f}%)".format(voltage, percentage), x=5, y=105
-        )
-    except:
-        pass
-
-    # Footer
-    display.text_pixels("UP=Menu  BACK=Exit", x=15, y=118, font="helvB08")
-
-    display.update()
-
-
-def ui_loop():
-    """Main UI loop with menu navigation"""
-    global ui_mode, current_menu_index, menu_scroll_offset
-
-    last_update = 0
-    update_interval = 0.5
-    button_pressed = {
-        "up": False,
-        "down": False,
-        "left": False,
-        "right": False,
-        "enter": False,
-        "back": False,
-    }
-
-    while True:
-        current_time = time.time()
-
-        # Update display
-        if current_time - last_update >= update_interval:
-            try:
-                if ui_mode == "status":
-                    draw_status_screen()
-                elif ui_mode == "scripts":
-                    draw_script_menu()
-
-                last_update = current_time
-            except Exception as e:
-                log("UI draw error", str(e))
-
-        # Handle button presses
-        try:
-            # UP button
-            if buttons.up and not button_pressed["up"]:
-                button_pressed["up"] = True
-
-                if ui_mode == "status":
-                    # Switch to script menu
-                    ui_mode = "scripts"
-                    current_menu_index = 0
-                    menu_scroll_offset = 0
-                    sound.beep()
-                elif ui_mode == "scripts":
-                    # Move selection up
-                    if current_menu_index > 0:
-                        current_menu_index -= 1
-                        sound.tone([(600, 50)])
-
-            elif not buttons.up:
-                button_pressed["up"] = False
-
-            # DOWN button
-            if buttons.down and not button_pressed["down"]:
-                button_pressed["down"] = True
-
-                if ui_mode == "scripts":
-                    scripts = script_manager.scan_scripts()
-                    if current_menu_index < len(scripts) - 1:
-                        current_menu_index += 1
-                        sound.tone([(600, 50)])
-
-            elif not buttons.down:
-                button_pressed["down"] = False
-
-            # ENTER button
-            if buttons.enter and not button_pressed["enter"]:
-                button_pressed["enter"] = True
-
-                if ui_mode == "scripts":
-                    scripts = script_manager.scan_scripts()
-                    if scripts and current_menu_index < len(scripts):
-                        # Run selected script
-                        script_name = scripts[current_menu_index]
-                        script_manager.run_script(script_name)
-
-                        # Show confirmation
-                        display.clear()
-                        display.text_pixels("Running:", x=40, y=50)
-                        display.text_pixels(script_name, x=20, y=65)
-                        display.update()
-                        time.sleep(1)
-
-                        # Return to status
-                        ui_mode = "status"
-
-            elif not buttons.enter:
-                button_pressed["enter"] = False
-
-            # BACK button
-            if buttons.backspace and not button_pressed["back"]:
-                button_pressed["back"] = True
-
-                if ui_mode == "scripts":
-                    # Return to status
-                    ui_mode = "status"
-                    sound.tone([(400, 100)])
-                else:
-                    # Exit program
-                    log("Backspace pressed - exiting")
-                    display.clear()
-                    display.text_pixels("Shutting down...", x=30, y=60)
-                    display.update()
-                    time.sleep(1)
-                    os._exit(0)
-
-            elif not buttons.backspace:
-                button_pressed["back"] = False
-
-        except Exception as e:
-            log("Button handling error", str(e))
-
-        time.sleep(0.05)  # 50ms loop
-
-
-# ============================================================================
-# SSL/SERVER
-# ============================================================================
-
-
 def generate_self_signed_cert(cert_file="ev3.crt", key_file="ev3.key"):
-    """Generate self-signed certificate"""
+    """Generate self-signed certificate if it doesn't exist"""
     if os.path.exists(cert_file) and os.path.exists(key_file):
+        log("Using existing certificate: {0}".format(cert_file))
         return True
-
+    
+    log("Generating self-signed certificate...")
     try:
+        # Get EV3's IP address for CN
         import socket
-
         hostname = socket.gethostname()
         local_ip = socket.gethostbyname(hostname)
-
+        
         cmd = [
-            "openssl",
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-nodes",
-            "-out",
-            cert_file,
-            "-keyout",
-            key_file,
-            "-days",
-            "365",
-            "-subj",
-            "/CN={0}".format(local_ip),
+            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            "-out", cert_file,
+            "-keyout", key_file,
+            "-days", "365",
+            "-subj", "/CN={0}".format(local_ip)
         ]
-
+        
         result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.returncode == 0
+        
+        if result.returncode == 0:
+            log("Certificate generated successfully")
+            log("Install {0} on iOS devices to trust certificate".format(cert_file))
+            return True
+        else:
+            log("Certificate generation failed", result.stderr)
+            return False
+            
     except Exception as e:
-        log("Certificate generation failed", str(e))
+        log("Failed to generate certificate", str(e))
+        if VERBOSE:
+            traceback.print_exc()
         return False
 
 
 def run_server():
-    """Start HTTP server"""
+    """Start HTTP server with optional SSL/TLS support"""
+    # Enable address reuse to prevent "Address already in use" errors
     socketserver.TCPServer.allow_reuse_address = True
-    server = socketserver.TCPServer(("", PORT), BridgeHandler)
-    server.allow_reuse_address = True
 
-    if USE_SSL:
-        if not generate_self_signed_cert(SSL_CERT, SSL_KEY):
-            log("Cannot start HTTPS without certificates")
-            return
+    server = None
+    try:
+        # Create base server
+        server = socketserver.TCPServer(("", PORT), BridgeHandler)
+        server.allow_reuse_address = True
+        
+        # Wrap with SSL if enabled
+        if USE_SSL:
+            log("Enabling HTTPS/SSL mode")
+            
+            # Generate certificate if needed
+            if not os.path.exists(SSL_CERT) or not os.path.exists(SSL_KEY):
+                if not generate_self_signed_cert(SSL_CERT, SSL_KEY):
+                    log("Cannot start HTTPS server without certificates")
+                    return
+            
+            # Create SSL context
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            try:
+                context.load_cert_chain(SSL_CERT, SSL_KEY)
+                server.socket = context.wrap_socket(server.socket, server_side=True)
+                log("SSL/TLS enabled successfully")
+            except Exception as e:
+                log("Failed to enable SSL", str(e))
+                if VERBOSE:
+                    traceback.print_exc()
+                return
 
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(SSL_CERT, SSL_KEY)
-        server.socket = context.wrap_socket(server.socket, server_side=True)
+        log("=" * 50)
+        log("EV3 Bridge Server v2.1 Started")
+        log("=" * 50)
+        log("Protocol: {0}".format("HTTPS" if USE_SSL else "HTTP"))
+        log("Listening on port {0}".format(PORT))
+        log("Verbose logging: {0}".format("ENABLED" if VERBOSE else "DISABLED"))
+        
+        if USE_SSL:
+            log("Certificate: {0}".format(SSL_CERT))
+            log("IMPORTANT: Install {0} on client devices!".format(SSL_CERT))
+        
+        log("Scripts directory: {0}".format(SCRIPTS_DIR))
+        log("Sounds directory: {0}".format(SOUNDS_DIR))
+        log("=" * 50)
 
-    log("=" * 50)
-    log("EV3 Bridge Server v2.2 Started")
-    log("Protocol: {0}".format("HTTPS" if USE_SSL else "HTTP"))
-    log("Port: {0}".format(PORT))
-    log("=" * 50)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        log("Server interrupted")
+    except Exception as e:
+        log("Server error", str(e))
+        if VERBOSE:
+            traceback.print_exc()
+    finally:
+        if server:
+            log("Shutting down server...")
+            server.shutdown()
+            server.server_close()
+        log("Server stopped")
 
-    server.serve_forever()
+def ui_loop():
+    """Display UI on EV3 screen"""
+    last_update = 0
+    update_interval = 1.0  # Update every second
 
+    while True:
+        current_time = time.time()
 
-# ============================================================================
-# MAIN
-# ============================================================================
+        if current_time - last_update >= update_interval:
+            try:
+                display.clear()
+
+                # Title
+                display.text_pixels("EV3 BRIDGE v2.1", x=10, y=5)
+                display.text_pixels("-" * 20, x=10, y=20)
+
+                # Status
+                display.text_pixels("Port: {0}".format(PORT), x=10, y=35)
+                display.text_pixels(
+                    "Scripts: {0}".format(len(running_scripts)), x=10, y=50
+                )
+
+                # Motor status - with disconnect protection
+                y = 65
+                for port, motor in list(
+                    motors.items()
+                ):  # Use list() to avoid dict change during iteration
+                    if motor:
+                        try:
+                            # Test if motor is still connected
+                            pos = motor.position
+                            display.text_pixels(
+                                "M{0}: {1}".format(port, pos), x=10, y=y
+                            )
+                            y += 15
+                            if y > 110:
+                                break
+                        except Exception as e:
+                            # Motor disconnected - remove from cache
+                            log("Motor {0} disconnected".format(port), str(e))
+                            motors[port] = None
+
+                # Sensors - with disconnect protection
+                sensor_count = 0
+                for key, sensor in list(sensors.items()):
+                    if sensor:
+                        try:
+                            # Test if sensor is still connected by accessing mode
+                            _ = sensor.mode
+                            sensor_count += 1
+                        except Exception:
+                            # Sensor disconnected - remove from cache
+                            sensors[key] = None
+
+                if sensor_count > 0:
+                    display.text_pixels("Sensors: {0}".format(sensor_count), x=10, y=95)
+
+                # Battery
+                try:
+                    voltage = power.measured_volts
+                    display.text_pixels("Bat: {0:.1f}V".format(voltage), x=10, y=110)
+                except Exception as e:
+                    log("Battery read error", str(e))
+
+                # Instructions
+                display.text_pixels("Press BACK to exit", x=5, y=120)
+
+                display.update()
+                last_update = current_time
+
+            except Exception as e:
+                log("UI update error", str(e))
+                if VERBOSE:
+                    traceback.print_exc()
+
+        # Check for exit button
+        try:
+            if buttons.backspace:
+                log("Backspace pressed - exiting")
+                display.clear()
+                display.text_pixels("Shutting down...", x=30, y=60)
+                display.update()
+                time.sleep(1)
+                os._exit(0)  # Force exit
+        except Exception as e:
+            log("Button check error", str(e))
+
+        time.sleep(0.1)
 
 
 def main():
+    """Main entry point"""
     global VERBOSE, PORT, USE_SSL, SSL_CERT, SSL_KEY
 
-    parser = argparse.ArgumentParser(description="EV3 Bridge Server v2.2")
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--verbose", "-v", action="store_true")
-    parser.add_argument("--no-ui", action="store_true")
-    parser.add_argument("--ssl", "--https", action="store_true")
-    parser.add_argument("--cert", type=str, default="ev3.crt")
-    parser.add_argument("--key", type=str, default="ev3.key")
+    parser = argparse.ArgumentParser(description="EV3 Bridge Server v2.1")
+    parser.add_argument(
+        "--port", type=int, default=8080, help="HTTP server port (default: 8080)"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose debug logging"
+    )
+    parser.add_argument(
+        "--no-ui", action="store_true", help="Disable LCD UI (headless mode)"
+    )
+    parser.add_argument(
+        "--ssl", "--https", action="store_true", 
+        help="Enable HTTPS/SSL (uses port 8443 by default)"
+    )
+    parser.add_argument(
+        "--cert", type=str, default="ev3.crt",
+        help="SSL certificate file (default: ev3.crt)"
+    )
+    parser.add_argument(
+        "--key", type=str, default="ev3.key",
+        help="SSL private key file (default: ev3.key)"
+    )
 
     args = parser.parse_args()
 
@@ -1822,41 +1365,49 @@ def main():
     USE_SSL = args.ssl
     SSL_CERT = args.cert
     SSL_KEY = args.key
-
+    
+    # Default to port 8443 for HTTPS if not explicitly set
     if USE_SSL and args.port == 8080:
         PORT = 8443
+        log("SSL enabled - using default HTTPS port 8443")
 
+    # Banner
     print("=" * 50)
-    print("EV3 BRIDGE SERVER v2.2 with Script Manager")
+    print("EV3 BRIDGE SERVER v2.1")
+    print("Python 3.5.3 Compatible")
+    print("=" * 50)
+    print("Protocol: {0}".format("HTTPS" if USE_SSL else "HTTP"))
+    print("Port: {0}".format(PORT))
+    print("Verbose: {0}".format(VERBOSE))
+    print("UI: {0}".format("Disabled" if args.no_ui else "Enabled"))
+    if USE_SSL:
+        print("Certificate: {0}".format(SSL_CERT))
+        print("Key: {0}".format(SSL_KEY))
     print("=" * 50)
 
-    # Start script scanning thread
-    def script_scanner():
-        while True:
-            script_manager.scan_scripts()
-            time.sleep(2)
-
-    scanner_thread = threading.Thread(target=script_scanner, daemon=True)
-    scanner_thread.start()
-
-    # Start server thread
-    server_thread = threading.Thread(target=run_server, daemon=True)
+    # Start server in background thread
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
     server_thread.start()
 
     if args.no_ui:
-        log("Running in headless mode")
+        # Headless mode - just keep running
+        log("Running in headless mode (no UI)")
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            pass
+            log("Interrupted - shutting down")
     else:
-        # Run UI with menu
+        # Run UI loop in main thread
         try:
             ui_loop()
         except KeyboardInterrupt:
-            pass
-
+            log("Interrupted - shutting down")
+        except Exception as e:
+            log("Fatal error in UI loop", str(e))
+            if VERBOSE:
+                traceback.print_exc()
 
 if __name__ == "__main__":
     main()
