@@ -2,7 +2,7 @@
 
 """
 ev3_ondevice_bridge.py
-Complete EV3 Bridge Server v2.2 with Integrated Script Manager
+EV3 Bridge Server v2.3 with Integrated Script Manager
 """
 
 import http.server
@@ -1219,7 +1219,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             if self.path == "/" or self.path == "/status":
                 status = {
                     "status": "ev3_bridge_active",
-                    "version": "2.2.0",
+                    "version": "2.3.0",
                     "running_scripts": len(running_scripts),
                     "available_scripts": len(script_list),
                     "motors": list(motors.keys()),
@@ -1596,7 +1596,7 @@ def draw_status_screen():
     display.clear()
 
     # Title
-    display.text_pixels("EV3 BRIDGE v2.2", x=15, y=2, font="Lat15-Terminus12x6")
+    display.text_pixels("EV3 BRIDGE v2.3", x=15, y=2, font="Lat15-Terminus12x6")
     display.text_pixels("=" * 26, x=2, y=15)
 
     # Connection info
@@ -1800,7 +1800,7 @@ def run_server():
         server.socket = context.wrap_socket(server.socket, server_side=True)
 
     log("=" * 50)
-    log("EV3 Bridge Server v2.2 Started")
+    log("EV3 Bridge Server v2.3 Started")
     log("Protocol: {0}".format("HTTPS" if USE_SSL else "HTTP"))
     log("Port: {0}".format(PORT))
     log("=" * 50)
@@ -1816,7 +1816,7 @@ def run_server():
 def main():
     global VERBOSE, PORT, USE_SSL, SSL_CERT, SSL_KEY
 
-    parser = argparse.ArgumentParser(description="EV3 Bridge Server v2.2")
+    parser = argparse.ArgumentParser(description="EV3 Bridge Server v2.3")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument("--no-ui", action="store_true")
@@ -1836,7 +1836,7 @@ def main():
         PORT = 8443
 
     print("=" * 50)
-    print("EV3 BRIDGE SERVER v2.2 with Script Manager")
+    print("EV3 BRIDGE SERVER v2.3 with Script Manager")
     print("=" * 50)
 
     # Start script scanning thread
