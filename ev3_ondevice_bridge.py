@@ -17,6 +17,7 @@ import base64
 import argparse
 import traceback
 import signal
+import queue
 from datetime import datetime
 import ssl
 from pathlib import Path
@@ -86,6 +87,7 @@ power = PowerSupply()
 # Script management
 running_scripts = {}
 script_counter = 0
+script_lock = threading.Lock()
 script_list = []  # List of available scripts
 script_list_lock = threading.Lock()
 current_menu_index = 0
@@ -231,79 +233,433 @@ class ScriptManager:
             vlog("Could not make script executable", str(e))
 
     def run_script(self, script_name):
-        """Run a script by name"""
-        global script_counter
-
-        if not script_name.endswith('.py') or '/' in script_name or '..' in script_name:
-            return None
+        """Run a script with bounded log capture"""
+        global script_counter, script_lock, running_scripts
 
         script_path = os.path.join(self.scripts_dir, script_name)
 
+        # SECURITY: Validate filename to prevent path traversal
+        if not script_name.endswith('.py') or '/' in script_name or '..' in script_name or '\\' in script_name:
+            log("Invalid script name", {"name": script_name, "reason": "path_traversal_attempt"})
+            return None
+
         if not os.path.exists(script_path):
+            log("Script not found", {"name": script_name, "path": script_path})
             return None
 
         try:
+            # Atomic counter increment
+            with script_lock:
+                script_id = script_counter
+                script_counter += 1
+
+            log("Starting script", {
+                "name": script_name,
+                "id": script_id,
+                "path": script_path
+            })
+
+            # Create log file in /tmp
+            log_file = "/tmp/ev3_script_{0}.log".format(script_id)
+
+            # Open log file
+            log_fd = open(log_file, 'w', buffering=1)  # Line buffered
+
             # Start process
             proc = subprocess.Popen(
-                ["python3", script_path],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                # stdout=subprocess.DEVNULL,  # Or log to file
-                # stderr=subprocess.DEVNULL,
-                stdin=subprocess.PIPE,
+                ["python3", "-u", script_path],  # -u for unbuffered output
+                stdout=log_fd,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout
+                stdin=subprocess.DEVNULL,  # Scripts shouldn't need input
+                cwd=self.scripts_dir,  # Run in scripts directory
             )
 
-            script_id = script_counter
-            script_counter += 1
-
-            with script_list_lock:
+            # Thread-safe insertion
+            with script_lock:
                 running_scripts[script_id] = {
                     "name": script_name,
                     "process": proc,
                     "started": time.time(),
+                    "log_file": log_file,
+                    "log_fd": log_fd,
                 }
 
-            log("Script started", {"name": script_name, "id": script_id})
+            log("Script started successfully", {
+                "name": script_name,
+                "id": script_id,
+                "pid": proc.pid,
+                "log_file": log_file
+            })
 
             # Play start sound
             try:
                 sound.beep()
-            except:
-                pass
+            except Exception as e:
+                vlog("Could not play start sound", str(e))
 
             return script_id
 
         except Exception as e:
-            log("Script start failed", str(e))
+            log("Script start failed", {
+                "name": script_name,
+                "error": str(e),
+                "type": type(e).__name__
+            })
             if VERBOSE:
                 traceback.print_exc()
             return None
 
     def stop_script(self, script_id):
-        """Stop a running script"""
-        if script_id not in running_scripts:
-            return False
-
+        """
+        Stop a running script with comprehensive error handling and logging.
+        
+        Thread-safe, idempotent, handles edge cases.
+        
+        Args:
+            script_id: Integer ID of script to stop
+            
+        Returns:
+            bool: True if stopped successfully, False if script not found
+        """
+        import time
+        global script_lock, running_scripts
+        
+        start_time = time.time()
+        
+        # Phase 1: Validate and extract script info (thread-safe)
+        log("Stop script requested", {
+            "script_id": script_id,
+            "timestamp": start_time
+        })
+        
+        with script_lock:
+            if script_id not in running_scripts:
+                log("Script not running (already stopped or never existed)", {
+                    "script_id": script_id,
+                    "known_scripts": list(running_scripts.keys())
+                })
+                return False
+            
+            # Make a copy of script info (don't hold lock during slow operations)
+            script_info = running_scripts[script_id].copy()
+        
+        # Extract info for clarity
+        process = script_info["process"]
+        log_fd = script_info.get("log_fd")
+        log_file = script_info.get("log_file")
+        script_name = script_info["name"]
+        start_timestamp = script_info["started"]
+        runtime = time.time() - start_timestamp
+        
+        log("Script info retrieved", {
+            "script_id": script_id,
+            "name": script_name,
+            "pid": process.pid if process else "N/A",
+            "runtime_seconds": round(runtime, 2),
+            "log_file": log_file
+        })
+        
+        # Phase 2: Check if process is already dead
         try:
-            running_scripts[script_id]["process"].terminate()
-            # Wait briefly for termination
-            running_scripts[script_id]["process"].wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            # Force kill if timeout
-            running_scripts[script_id]["process"].kill()
+            poll_result = process.poll()
+            if poll_result is not None:
+                log("Process already terminated", {
+                    "script_id": script_id,
+                    "pid": process.pid,
+                    "exit_code": poll_result,
+                    "runtime": round(runtime, 2)
+                })
+                # Skip termination, go straight to cleanup
+                process_stopped = True
+            else:
+                process_stopped = False
+                log("Process is running, will terminate", {
+                    "script_id": script_id,
+                    "pid": process.pid
+                })
         except Exception as e:
-            log("Script stop error", str(e))
-
-        del running_scripts[script_id]
-        log("Script stopped", {"id": script_id})
-
-        # Play stop sound
+            log("Error checking process status", {
+                "script_id": script_id,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+            process_stopped = False
+        
+        # Phase 3: Graceful termination (SIGTERM)
+        if not process_stopped:
+            try:
+                log("Sending SIGTERM", {
+                    "script_id": script_id,
+                    "pid": process.pid
+                })
+                
+                process.terminate()
+                
+                log("SIGTERM sent, waiting up to 2 seconds", {
+                    "script_id": script_id,
+                    "pid": process.pid
+                })
+                
+                try:
+                    exit_code = process.wait(timeout=2.0)
+                    log("Process terminated gracefully", {
+                        "script_id": script_id,
+                        "pid": process.pid,
+                        "exit_code": exit_code,
+                        "method": "SIGTERM",
+                        "wait_time": round(time.time() - start_time, 2)
+                    })
+                    process_stopped = True
+                    
+                except subprocess.TimeoutExpired:
+                    log("Process did not respond to SIGTERM within 2 seconds", {
+                        "script_id": script_id,
+                        "pid": process.pid,
+                        "timeout_seconds": 2
+                    })
+                    process_stopped = False
+                    
+            except OSError as e:
+                # Process might have died between poll() and terminate()
+                if e.errno == 3:  # ESRCH - No such process
+                    log("Process disappeared before SIGTERM (race condition)", {
+                        "script_id": script_id,
+                        "pid": process.pid,
+                        "errno": e.errno
+                    })
+                    process_stopped = True
+                else:
+                    log("OSError during SIGTERM", {
+                        "script_id": script_id,
+                        "error": str(e),
+                        "errno": e.errno
+                    })
+                    
+            except Exception as e:
+                log("Unexpected error during SIGTERM", {
+                    "script_id": script_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc() if VERBOSE else None
+                })
+        
+        # Phase 4: Force kill if still alive (SIGKILL)
+        if not process_stopped:
+            try:
+                log("Force killing process with SIGKILL", {
+                    "script_id": script_id,
+                    "pid": process.pid
+                })
+                
+                process.kill()
+                
+                log("SIGKILL sent, waiting up to 1 second", {
+                    "script_id": script_id,
+                    "pid": process.pid
+                })
+                
+                try:
+                    exit_code = process.wait(timeout=1.0)
+                    log("Process killed forcefully", {
+                        "script_id": script_id,
+                        "pid": process.pid,
+                        "exit_code": exit_code,
+                        "method": "SIGKILL",
+                        "total_wait_time": round(time.time() - start_time, 2)
+                    })
+                    process_stopped = True
+                    
+                except subprocess.TimeoutExpired:
+                    log("WARNING: Process survived SIGKILL (zombie or kernel issue)", {
+                        "script_id": script_id,
+                        "pid": process.pid,
+                        "timeout_seconds": 1
+                    })
+                    # Continue with cleanup anyway
+                    process_stopped = True
+                    
+            except OSError as e:
+                if e.errno == 3:  # ESRCH
+                    log("Process disappeared before SIGKILL", {
+                        "script_id": script_id,
+                        "errno": e.errno
+                    })
+                    process_stopped = True
+                else:
+                    log("OSError during SIGKILL", {
+                        "script_id": script_id,
+                        "error": str(e),
+                        "errno": e.errno
+                    })
+                    
+            except Exception as e:
+                log("Unexpected error during SIGKILL", {
+                    "script_id": script_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc() if VERBOSE else None
+                })
+        
+        # Phase 5: Cleanup log file (even if process stop failed)
+        if log_fd:
+            try:
+                log("Flushing log file buffer", {
+                    "script_id": script_id,
+                    "log_file": log_file
+                })
+                
+                log_fd.flush()
+                
+                log("Closing log file descriptor", {
+                    "script_id": script_id,
+                    "log_file": log_file
+                })
+                
+                log_fd.close()
+                
+                log("Log file closed successfully", {
+                    "script_id": script_id,
+                    "log_file": log_file
+                })
+                
+            except ValueError as e:
+                # File already closed
+                log("Log file already closed", {
+                    "script_id": script_id,
+                    "log_file": log_file,
+                    "error": str(e)
+                })
+                
+            except Exception as e:
+                log("Error closing log file", {
+                    "script_id": script_id,
+                    "log_file": log_file,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "traceback": traceback.format_exc() if VERBOSE else None
+                })
+        else:
+            log("No log file descriptor to close", {
+                "script_id": script_id
+            })
+        
+        # Phase 6: Delete log file from disk
+        if log_file and os.path.exists(log_file):
+            try:
+                file_size = os.path.getsize(log_file)
+                
+                log("Deleting log file from disk", {
+                    "script_id": script_id,
+                    "log_file": log_file,
+                    "size_bytes": file_size
+                })
+                
+                os.remove(log_file)
+                
+                log("Log file deleted successfully", {
+                    "script_id": script_id,
+                    "log_file": log_file,
+                    "freed_bytes": file_size
+                })
+                
+            except FileNotFoundError:
+                log("Log file already deleted", {
+                    "script_id": script_id,
+                    "log_file": log_file
+                })
+                
+            except PermissionError as e:
+                log("Permission denied deleting log file (will be cleaned later)", {
+                    "script_id": script_id,
+                    "log_file": log_file,
+                    "error": str(e)
+                })
+                
+            except Exception as e:
+                log("Error deleting log file", {
+                    "script_id": script_id,
+                    "log_file": log_file,
+                    "error": str(e),
+                    "error_type": type(e).__name__
+                })
+        elif log_file:
+            log("Log file does not exist (already deleted or never created)", {
+                "script_id": script_id,
+                "log_file": log_file
+            })
+        
+        # Phase 7: Remove from running_scripts dict (thread-safe)
+        with script_lock:
+            if script_id in running_scripts:
+                del running_scripts[script_id]
+                log("Removed from running_scripts registry", {
+                    "script_id": script_id,
+                    "remaining_scripts": len(running_scripts)
+                })
+            else:
+                log("Already removed from registry (race condition)", {
+                    "script_id": script_id
+                })
+        
+        # Phase 8: Calculate final statistics
+        total_time = time.time() - start_time
+        
+        log("Script stop completed", {
+            "script_id": script_id,
+            "name": script_name,
+            "success": process_stopped,
+            "total_stop_time_seconds": round(total_time, 3),
+            "script_runtime_seconds": round(runtime, 2)
+        })
+        
+        # Phase 9: Audio feedback (non-critical, don't let this fail the operation)
         try:
-            sound.tone([(400, 100)])
-        except:
-            pass
-
+            sound.tone([(400, 100, 0)])
+            vlog("Stop sound played", {"script_id": script_id})
+        except Exception as e:
+            vlog("Could not play stop sound (non-critical)", {
+                "script_id": script_id,
+                "error": str(e)
+            })
+        
         return True
+
+    def get_script_log(self, script_id, max_lines=100):
+        """Get recent log lines for a script"""
+        global script_lock, running_scripts
+
+        with script_lock:
+            if script_id not in running_scripts:
+                # Try to read log file even if script stopped
+                log_file = "/tmp/ev3_script_{0}.log".format(script_id)
+                if not os.path.exists(log_file):
+                    return []
+            else:
+                log_file = running_scripts[script_id]["log_file"]
+
+        try:
+            # Read last N lines efficiently using tail
+            import subprocess
+            result = subprocess.run(
+                ["tail", "-n", str(max_lines), log_file],
+                capture_output=True,
+                text=True,
+                timeout=1
+            )
+            lines = result.stdout.strip().split('\n') if result.stdout else []
+            
+            vlog("Retrieved script logs", {
+                "script_id": script_id,
+                "line_count": len(lines)
+            })
+            
+            return lines
+        except Exception as e:
+            log("Error reading script log", {
+                "script_id": script_id,
+                "error": str(e)
+            })
+            return []
 
     def stop_all_scripts(self):
         """Stop all running scripts"""
@@ -314,7 +670,8 @@ class ScriptManager:
     def delete_script(self, script_name):
         """Delete a script file"""
         if not script_name.endswith('.py') or '/' in script_name or '..' in script_name:
-            return None
+            log("Invalid script name for deletion", script_name)
+            return False
 
         script_path = os.path.join(self.scripts_dir, script_name)
 
@@ -546,6 +903,13 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 filename = data["name"]
                 code = data["code"]
 
+                # SECURITY: Validate filename
+                if not filename.endswith('.py') or '/' in filename or '..' in filename or '\\' in filename:
+                    self._send_json({"status": "error", "msg": "Invalid filename"}, 400)
+                    return
+                
+                os.makedirs(SCRIPTS_DIR, exist_ok=True)
+
                 filepath = os.path.join(SCRIPTS_DIR, filename)
 
                 # Write script
@@ -566,16 +930,64 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"status": "ok", "msg": "Script uploaded"})
 
             elif command == "upload_sound":
-                filename = os.path.join(SOUNDS_DIR, data["name"])
-                # Decode base64 if present
-                if "data" in data:
-                    sound_data = base64.b64decode(data["data"])
-                    with open(filename, "wb") as f:
+                filename = data.get("name")
+                sound_data_b64 = data.get("data")
+                
+                if not filename or not sound_data_b64:
+                    self._send_json({"status": "error", "msg": "Missing filename or data"}, 400)
+                    return
+                
+                # SECURITY: Validate filename
+                if not filename.endswith(('.wav', '.mp3', '.ogg')):
+                    self._send_json({"status": "error", "msg": "Invalid file type"}, 400)
+                    return
+                
+                # Sanitize filename (prevent path traversal)
+                safe_filename = os.path.basename(filename)
+                safe_filename = "".join(c for c in safe_filename if c.isalnum() or c in '._-')
+                
+                if not safe_filename:
+                    self._send_json({"status": "error", "msg": "Invalid filename"}, 400)
+                    return
+                
+                try:
+                    # Decode base64
+                    try:
+                        sound_data = base64.b64decode(sound_data_b64, validate=True)
+                    except:
+                        self._send_json({"status": "error", "msg": "Invalid base64"}, 400)
+                        return
+                    
+                    # Validate size (max 10MB)
+                    if len(sound_data) > 10 * 1024 * 1024:
+                        self._send_json({"status": "error", "msg": "File too large (max 10MB)"}, 400)
+                        return
+                    
+                    # Write to sounds directory
+                    filepath = os.path.join(SOUNDS_DIR, safe_filename)
+                    
+                    with open(filepath, "wb") as f:
                         f.write(sound_data)
-                    log("Sound uploaded: {0}".format(data["name"]))
-                    self._send_json({"status": "ok", "msg": "Sound uploaded"})
-                else:
-                    self._send_json({"status": "error", "msg": "No sound data"})
+                    
+                    log("Sound uploaded", {
+                        "filename": safe_filename,
+                        "size": len(sound_data),
+                        "path": filepath
+                    })
+                    
+                    self._send_json({
+                        "status": "ok",
+                        "msg": "Sound uploaded",
+                        "filename": safe_filename,
+                        "size": len(sound_data)
+                    })
+                    
+                except Exception as e:
+                    log("Sound upload failed", str(e))
+                    if VERBOSE:
+                        traceback.print_exc()
+                    self._send_json({"status": "error", "msg": str(e)}, 500)
+
 
             elif command == "run_script":
                 script_name = data["name"]
@@ -1098,12 +1510,19 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     self._send_json({"status": "error", "msg": "No filename"}, 400)
 
             elif command == "play_song":
-                # Play sequence of notes
-                notes = data.get("notes", [])  # List of (note, duration) tuples
-                for note, duration in notes:
-                    sound.play_note(note, duration)
-                vlog("Playing song", {"notes": notes})
-                self._send_json({"status": "ok"})
+                # Data comes in as [[note, dur], [note, dur]]
+                raw_notes = data.get("notes", [])
+                tempo = data.get("tempo", 120)
+                
+                # Convert list of lists to list of tuples for ev3dev2
+                notes = [(n[0], n[1]) for n in raw_notes]
+                
+                try:
+                    sound.play_song(notes, tempo=tempo)
+                    vlog("Playing song", {"notes_count": len(notes)})
+                    self._send_json({"status": "ok"})
+                except Exception as e:
+                    self._send_json({"status": "error", "msg": str(e)})
 
             elif command == "set_volume":
                 volume = data["volume"]
@@ -1245,6 +1664,35 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                     }
                 )
 
+            elif self.path.startswith("/script/") and "/logs" in self.path:
+                try:
+                    # Parse: /script/123/logs?max=100
+                    parts = self.path.split('/')
+                    script_id = int(parts[2])
+                    
+                    # Parse query parameters
+                    max_lines = 100
+                    if '?' in self.path:
+                        query = self.path.split('?')[1]
+                        for param in query.split('&'):
+                            if param.startswith('max='):
+                                max_lines = int(param.split('=')[1])
+                    
+                    lines = script_manager.get_script_log(script_id, max_lines)
+                    
+                    self._send_json({
+                        "status": "ok",
+                        "script_id": script_id,
+                        "lines": lines,
+                        "count": len(lines)
+                    })
+                    
+                except ValueError:
+                    self._send_json({"status": "error", "msg": "Invalid script ID"}, 400)
+                except Exception as e:
+                    log("Error fetching logs", str(e))
+                    self._send_json({"status": "error", "msg": str(e)}, 500)
+
             # === BATTERY ===
             elif self.path == "/battery":
                 voltage = power.measured_volts
@@ -1308,7 +1756,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             # === TOUCH SENSOR ===
             elif self.path.startswith("/sensor/touch/"):
                 port = self.path.split("/")[-1]
-                sensor = get_sensor(port, TouchSensor)
+                sensor = get_sensor(port, "touch")
                 value = sensor.is_pressed if sensor else False
                 vlog("Touch sensor read", {"port": port, "pressed": value})
                 self._send_json({"value": value})
@@ -1319,7 +1767,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 port = parts[3]
                 mode = parts[4] if len(parts) > 4 else "color"
 
-                sensor = get_sensor(port, ColorSensor)
+                sensor = get_sensor(port, "color")
 
                 if not sensor:
                     self._send_json({"value": 0})
@@ -1343,7 +1791,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 port = parts[3]
                 component = parts[4] if len(parts) > 4 else "red"
 
-                sensor = get_sensor(port, ColorSensor)
+                sensor = get_sensor(port, "color")
 
                 if not sensor:
                     self._send_json({"value": 0})
@@ -1363,7 +1811,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
             # === ULTRASONIC SENSOR ===
             elif self.path.startswith("/sensor/ultrasonic/"):
                 port = self.path.split("/")[-1]
-                sensor = get_sensor(port, UltrasonicSensor)
+                sensor = get_sensor(port, "ultrasonic")
                 value = sensor.distance_centimeters if sensor else 0
                 vlog("Ultrasonic sensor read", {"port": port, "distance": value})
                 self._send_json({"value": value})
@@ -1374,7 +1822,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 port = parts[3]
                 mode = parts[4] if len(parts) > 4 else "angle"
 
-                sensor = get_sensor(port, GyroSensor)
+                sensor = get_sensor(port, "gyro")
 
                 if not sensor:
                     value = 0 if mode != "both" else {"angle": 0, "rate": 0}
@@ -1399,7 +1847,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 port = parts[3]
                 mode = parts[4] if len(parts) > 4 else "proximity"
 
-                sensor = get_sensor(port, InfraredSensor)
+                sensor = get_sensor(port, "infrared")
 
                 if not sensor:
                     self._send_json({"value": 0})
@@ -1438,7 +1886,7 @@ class BridgeHandler(http.server.BaseHTTPRequestHandler):
                 port = parts[3]
                 mode = parts[4] if len(parts) > 4 else "db"  # db or dba
 
-                sensor = get_sensor(port, "sound")
+                sensor = get_sensor(port, "sound") 
 
                 if not sensor:
                     self._send_json({"value": 0})
