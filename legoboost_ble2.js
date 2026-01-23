@@ -599,7 +599,13 @@
   // ============================================================================
 
   class Boost {
-    constructor() {
+    constructor(runtime, extensionId) {
+      this._runtime = runtime;
+      this._extensionId = extensionId;
+      this._ble = null;
+      this._onConnect = this._onConnect.bind(this);
+      this._onMessage = this._onMessage.bind(this);
+
       this._rateLimiter = new RateLimiter(BoostBLE.sendRateMax);
       this._pingDeviceId = null;
       this._ble = null;
@@ -738,62 +744,35 @@
     }
 
     connect() {
-      if (this._ble && this._ble.isConnected()) {
-        return;
-      }
-
-      const options = {
-        filters: [
+      if (!this._ble) {
+        this._ble = new Scratch.BLE(
+          this._runtime,
+          this._extensionId,
           {
-            services: [BoostBLE.service],
-            manufacturerData: [
+            filters: [
               {
-                companyIdentifier: 0x0397,
-                dataPrefix: new Uint8Array([0x00, 0x40]),
-                mask: new Uint8Array([0x00, 0xff]),
+                services: [BoostBLE.service],
+                manufacturerData: [
+                  {
+                    companyIdentifier: 0x0397,
+                    dataPrefix: [0x00, 0x40],
+                    mask: [0x00, 0xff],
+                  },
+                ],
               },
             ],
+            optionalServices: [],
           },
-        ],
-      };
-
-      navigator.bluetooth
-        .requestDevice(options)
-        .then((device) => {
-          this._ble = device;
-          return device.gatt.connect();
-        })
-        .then((server) => {
-          return server.getPrimaryService(BoostBLE.service);
-        })
-        .then((service) => {
-          return service.getCharacteristic(BoostBLE.characteristic);
-        })
-        .then((characteristic) => {
-          this._characteristic = characteristic;
-          return characteristic.startNotifications();
-        })
-        .then((characteristic) => {
-          characteristic.addEventListener(
-            "characteristicvaluechanged",
-            (event) => {
-              const value = event.target.value;
-              const array = new Uint8Array(value.buffer);
-              const base64 = Base64Util.uint8ArrayToBase64(array);
-              this._onMessage(base64);
-            },
-          );
-          this._onConnect();
-        })
-        .catch((error) => {
-          console.error("BLE connection failed:", error);
-          this.disconnect();
-        });
+          this._onConnect,
+          this.reset,
+        );
+      }
+      this._ble.connectPeripheral();
     }
 
     disconnect() {
-      if (this._ble && this._ble.gatt && this._ble.gatt.connected) {
-        this._ble.gatt.disconnect();
+      if (this._ble) {
+        this._ble.disconnect();
       }
       this.reset();
     }
@@ -832,18 +811,21 @@
     }
 
     isConnected() {
-      return this._ble && this._ble.gatt && this._ble.gatt.connected;
+      return this._ble && this._ble.isConnected();
     }
 
     send(uuid, message, useLimiter = true) {
       if (!this.isConnected()) return Promise.resolve();
-
       if (useLimiter && !this._rateLimiter.okayToSend()) {
         return Promise.resolve();
       }
-
-      const value = new Uint8Array(message);
-      return this._characteristic.writeValue(value);
+      return this._ble.write(
+        BoostBLE.service,
+        uuid,
+        Base64Util.uint8ArrayToBase64(message),
+        "base64",
+        false,
+      );
     }
 
     generateOutputCommand(portID, execution, subCommand, payload) {
@@ -884,6 +866,13 @@
     }
 
     _onConnect() {
+      // Start notifications
+      this._ble.startNotifications(
+        BoostBLE.service,
+        BoostBLE.characteristic,
+        this._onMessage,
+      );
+
       this._pingDeviceId = setInterval(this._pingDevice, BoostPingInterval);
 
       setTimeout(() => {
@@ -1117,7 +1106,9 @@
 
     _pingDevice() {
       if (this.isConnected()) {
-        this._characteristic.readValue().catch(() => {});
+        this._ble
+          .read(BoostBLE.service, BoostBLE.characteristic, false)
+          .catch(() => {});
       }
     }
 
@@ -1210,8 +1201,9 @@
   };
 
   class BoostExtension {
-    constructor() {
-      this._peripheral = new Boost();
+    constructor(runtime) {
+      this._runtime = runtime;
+      this._peripheral = new Boost(runtime, "legoboost");
     }
 
     getInfo() {
@@ -1220,16 +1212,6 @@
         name: "LEGO Boost Enhanced",
         blockIconURI: iconURI,
         blocks: [
-          {
-            opcode: "connect",
-            text: "connect to Boost",
-            blockType: BlockType.COMMAND,
-          },
-          {
-            opcode: "disconnect",
-            text: "disconnect Boost",
-            blockType: BlockType.COMMAND,
-          },
           "---",
           {
             opcode: "motorOnFor",
@@ -1650,6 +1632,12 @@
       };
     }
 
+    _ensureConnected() {
+      if (!this._peripheral.isConnected()) {
+        this._peripheral.connect();
+      }
+    }
+
     connect() {
       this._peripheral.connect();
     }
@@ -1761,6 +1749,7 @@
     }
 
     motorOn(args) {
+      this._ensureConnected();
       this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
         const motor = this._peripheral.motor(motorIndex);
         if (motor) motor.turnOnForever();
@@ -2080,5 +2069,5 @@
     }
   }
 
-  Scratch.extensions.register(new BoostExtension());
+  Scratch.extensions.register(new BoostExtension(Scratch));
 })(Scratch);

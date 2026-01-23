@@ -206,299 +206,320 @@
   };
 
   /**
- * Detect language using multiple methods and log results
- * @returns {string} Detected language code ('en' or 'de')
- */
-function detectLanguage() {
-  const results = {};
-  let finalLanguage = "en"; // Default fallback
+   * Detect language using multiple methods and log results
+   * @returns {string} Detected language code ('en' or 'de')
+   */
+  function detectLanguage() {
+    const results = {};
+    let finalLanguage = "en"; // Default fallback
 
-  console.log("=== LANGUAGE DETECTION DEBUG ===");
+    console.log("=== LANGUAGE DETECTION DEBUG ===");
 
-  // Method 1: navigator.language
-  try {
-    results.navigatorLanguage = navigator.language;
-    console.log("1. navigator.language:", navigator.language);
-  } catch (e) {
-    results.navigatorLanguage = "error: " + e.message;
-    console.log("1. navigator.language: ERROR", e.message);
-  }
-
-  // Method 2: navigator.languages array
-  try {
-    results.navigatorLanguages = navigator.languages;
-    console.log("2. navigator.languages:", navigator.languages);
-  } catch (e) {
-    results.navigatorLanguages = "error: " + e.message;
-    console.log("2. navigator.languages: ERROR", e.message);
-  }
-
-  // Method 3: TurboWarp localStorage settings
-  try {
-    const twSettings = localStorage.getItem("tw:language");
-    results.turboWarpLocalStorage = twSettings;
-    console.log("3. TurboWarp localStorage (tw:language):", twSettings);
-  } catch (e) {
-    results.turboWarpLocalStorage = "error: " + e.message;
-    console.log("3. TurboWarp localStorage: ERROR", e.message);
-  }
-
-  // Method 4: Scratch VM locale (if available)
-  try {
-    if (typeof Scratch !== "undefined" && Scratch.vm && Scratch.vm.runtime) {
-      const vmLocale = Scratch.vm.runtime.getLocale
-        ? Scratch.vm.runtime.getLocale()
-        : null;
-      results.scratchVMLocale = vmLocale;
-      console.log("4. Scratch VM locale:", vmLocale);
-    } else {
-      results.scratchVMLocale = "Scratch.vm not available";
-      console.log("4. Scratch VM locale: NOT AVAILABLE");
+    // Method 1: navigator.language
+    try {
+      results.navigatorLanguage = navigator.language;
+      console.log("1. navigator.language:", navigator.language);
+    } catch (e) {
+      results.navigatorLanguage = "error: " + e.message;
+      console.log("1. navigator.language: ERROR", e.message);
     }
-  } catch (e) {
-    results.scratchVMLocale = "error: " + e.message;
-    console.log("4. Scratch VM locale: ERROR", e.message);
-  }
 
-  // Method 5: Check document.documentElement.lang
-  try {
-    const htmlLang = document.documentElement.lang;
-    results.documentLang = htmlLang;
-    console.log("5. document.documentElement.lang:", htmlLang);
-  } catch (e) {
-    results.documentLang = "error: " + e.message;
-    console.log("5. document.documentElement.lang: ERROR", e.message);
-  }
-
-  // Method 6: Check URL parameters
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlLang = urlParams.get("lang") || urlParams.get("locale");
-    results.urlParameter = urlLang;
-    console.log("6. URL parameter (lang/locale):", urlLang);
-  } catch (e) {
-    results.urlParameter = "error: " + e.message;
-    console.log("6. URL parameter: ERROR", e.message);
-  }
-
-  // Method 7: Check for Scratch translate object
-  try {
-    if (
-      typeof window !== "undefined" &&
-      window.scratchTranslate &&
-      window.scratchTranslate.locale
-    ) {
-      results.scratchTranslate = window.scratchTranslate.locale;
-      console.log("7. window.scratchTranslate.locale:", window.scratchTranslate.locale);
-    } else {
-      results.scratchTranslate = "not available";
-      console.log("7. window.scratchTranslate: NOT AVAILABLE");
+    // Method 2: navigator.languages array
+    try {
+      results.navigatorLanguages = navigator.languages;
+      console.log("2. navigator.languages:", navigator.languages);
+    } catch (e) {
+      results.navigatorLanguages = "error: " + e.message;
+      console.log("2. navigator.languages: ERROR", e.message);
     }
-  } catch (e) {
-    results.scratchTranslate = "error: " + e.message;
-    console.log("7. window.scratchTranslate: ERROR", e.message);
-  }
 
-  // Method 8: Check Redux store (TurboWarp uses Redux)
-  try {
-    if (
-      typeof window !== "undefined" &&
-      window.ReduxStore &&
-      window.ReduxStore.getState
-    ) {
-      const state = window.ReduxStore.getState();
-      const reduxLocale = state.locales?.locale;
-      results.reduxStore = reduxLocale;
-      console.log("8. Redux store locale:", reduxLocale);
-    } else {
-      results.reduxStore = "not available";
-      console.log("8. Redux store: NOT AVAILABLE");
+    // Method 3: TurboWarp localStorage settings
+    try {
+      const twSettings = localStorage.getItem("tw:language");
+      results.turboWarpLocalStorage = twSettings;
+      console.log("3. TurboWarp localStorage (tw:language):", twSettings);
+    } catch (e) {
+      results.turboWarpLocalStorage = "error: " + e.message;
+      console.log("3. TurboWarp localStorage: ERROR", e.message);
     }
-  } catch (e) {
-    results.reduxStore = "error: " + e.message;
-    console.log("8. Redux store: ERROR", e.message);
-  }
 
-  // Method 9: Check global window._locale (some Scratch forks use this)
-  try {
-    if (typeof window !== "undefined" && window._locale) {
-      results.windowLocale = window._locale;
-      console.log("9. window._locale:", window._locale);
-    } else {
-      results.windowLocale = "not available";
-      console.log("9. window._locale: NOT AVAILABLE");
-    }
-  } catch (e) {
-    results.windowLocale = "error: " + e.message;
-    console.log("9. window._locale: ERROR", e.message);
-  }
-
-  // Method 10: Check meta tags
-  try {
-    const metaLang = document.querySelector('meta[http-equiv="content-language"]');
-    const metaContent = metaLang ? metaLang.getAttribute("content") : null;
-    results.metaTag = metaContent;
-    console.log("10. Meta tag content-language:", metaContent);
-  } catch (e) {
-    results.metaTag = "error: " + e.message;
-    console.log("10. Meta tag: ERROR", e.message);
-  }
-
-  console.log("\n=== ALL DETECTION RESULTS ===");
-  console.log(JSON.stringify(results, null, 2));
-
-  // Decision logic - Priority order
-  console.log("\n=== DECISION LOGIC ===");
-
-  // Priority 1: Redux store (most reliable for TurboWarp)
-  if (
-    results.reduxStore &&
-    typeof results.reduxStore === "string" &&
-    !results.reduxStore.includes("error")
-  ) {
-    console.log("✓ Using Redux store locale:", results.reduxStore);
-    finalLanguage = results.reduxStore.toLowerCase().startsWith("de") ? "de" : "en";
-  }
-  // Priority 2: Scratch VM locale
-  else if (
-    results.scratchVMLocale &&
-    typeof results.scratchVMLocale === "string" &&
-    !results.scratchVMLocale.includes("error")
-  ) {
-    console.log("✓ Using Scratch VM locale:", results.scratchVMLocale);
-    finalLanguage = results.scratchVMLocale.toLowerCase().startsWith("de") ? "de" : "en";
-  }
-  // Priority 3: TurboWarp localStorage
-  else if (
-    results.turboWarpLocalStorage &&
-    typeof results.turboWarpLocalStorage === "string" &&
-    !results.turboWarpLocalStorage.includes("error")
-  ) {
-    console.log("✓ Using TurboWarp localStorage:", results.turboWarpLocalStorage);
-    finalLanguage = results.turboWarpLocalStorage.toLowerCase().startsWith("de")
-      ? "de"
-      : "en";
-  }
-  // Priority 4: document.documentElement.lang
-  else if (
-    results.documentLang &&
-    typeof results.documentLang === "string" &&
-    results.documentLang !== "" &&
-    !results.documentLang.includes("error")
-  ) {
-    console.log("✓ Using document.documentElement.lang:", results.documentLang);
-    finalLanguage = results.documentLang.toLowerCase().startsWith("de") ? "de" : "en";
-  }
-  // Priority 5: URL parameter
-  else if (
-    results.urlParameter &&
-    typeof results.urlParameter === "string" &&
-    !results.urlParameter.includes("error")
-  ) {
-    console.log("✓ Using URL parameter:", results.urlParameter);
-    finalLanguage = results.urlParameter.toLowerCase().startsWith("de") ? "de" : "en";
-  }
-  // Priority 6: navigator.language
-  else if (
-    results.navigatorLanguage &&
-    typeof results.navigatorLanguage === "string" &&
-    !results.navigatorLanguage.includes("error")
-  ) {
-    console.log("✓ Using navigator.language:", results.navigatorLanguage);
-    finalLanguage = results.navigatorLanguage.toLowerCase().startsWith("de")
-      ? "de"
-      : "en";
-  }
-  // Priority 7: First entry in navigator.languages
-  else if (
-    results.navigatorLanguages &&
-    Array.isArray(results.navigatorLanguages) &&
-    results.navigatorLanguages.length > 0
-  ) {
-    console.log("✓ Using navigator.languages[0]:", results.navigatorLanguages[0]);
-    finalLanguage = results.navigatorLanguages[0].toLowerCase().startsWith("de")
-      ? "de"
-      : "en";
-  }
-  // Fallback: Default to English
-  else {
-    console.log("✗ No locale detected, using default: en");
-    finalLanguage = "en";
-  }
-
-  console.log("\n=== FINAL DECISION ===");
-  console.log("Selected language:", finalLanguage);
-  console.log("================================\n");
-
-  // Store results for debugging
-  if (typeof window !== "undefined") {
-    window._ev3LanguageDetection = {
-      timestamp: new Date().toISOString(),
-      results: results,
-      finalLanguage: finalLanguage,
-    };
-    console.log(
-      "Debug info stored in: window._ev3LanguageDetection"
-    );
-  }
-
-  return finalLanguage;
-}
-
-// Detect language on load
-let currentLang = detectLanguage();
-
-// Re-detect if language changes (listen for changes)
-if (typeof window !== "undefined") {
-  // Listen for localStorage changes (for TurboWarp language switches)
-  window.addEventListener("storage", (e) => {
-    if (e.key === "tw:language") {
-      console.log("TurboWarp language changed, re-detecting...");
-      const newLang = detectLanguage();
-      if (newLang !== currentLang) {
-        currentLang = newLang;
-        console.log("Language updated to:", currentLang);
-        // Note: Extension would need to reload to apply new translations
-        console.warn(
-          "Extension translations will apply after reload"
-        );
+    // Method 4: Scratch VM locale (if available)
+    try {
+      if (typeof Scratch !== "undefined" && Scratch.vm && Scratch.vm.runtime) {
+        const vmLocale = Scratch.vm.runtime.getLocale
+          ? Scratch.vm.runtime.getLocale()
+          : null;
+        results.scratchVMLocale = vmLocale;
+        console.log("4. Scratch VM locale:", vmLocale);
+      } else {
+        results.scratchVMLocale = "Scratch.vm not available";
+        console.log("4. Scratch VM locale: NOT AVAILABLE");
       }
+    } catch (e) {
+      results.scratchVMLocale = "error: " + e.message;
+      console.log("4. Scratch VM locale: ERROR", e.message);
     }
-  });
 
-  // Watch for Redux state changes
-  let lastKnownLocale = null;
-  setInterval(() => {
+    // Method 5: Check document.documentElement.lang
+    try {
+      const htmlLang = document.documentElement.lang;
+      results.documentLang = htmlLang;
+      console.log("5. document.documentElement.lang:", htmlLang);
+    } catch (e) {
+      results.documentLang = "error: " + e.message;
+      console.log("5. document.documentElement.lang: ERROR", e.message);
+    }
+
+    // Method 6: Check URL parameters
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlLang = urlParams.get("lang") || urlParams.get("locale");
+      results.urlParameter = urlLang;
+      console.log("6. URL parameter (lang/locale):", urlLang);
+    } catch (e) {
+      results.urlParameter = "error: " + e.message;
+      console.log("6. URL parameter: ERROR", e.message);
+    }
+
+    // Method 7: Check for Scratch translate object
     try {
       if (
+        typeof window !== "undefined" &&
+        window.scratchTranslate &&
+        window.scratchTranslate.locale
+      ) {
+        results.scratchTranslate = window.scratchTranslate.locale;
+        console.log(
+          "7. window.scratchTranslate.locale:",
+          window.scratchTranslate.locale,
+        );
+      } else {
+        results.scratchTranslate = "not available";
+        console.log("7. window.scratchTranslate: NOT AVAILABLE");
+      }
+    } catch (e) {
+      results.scratchTranslate = "error: " + e.message;
+      console.log("7. window.scratchTranslate: ERROR", e.message);
+    }
+
+    // Method 8: Check Redux store (TurboWarp uses Redux)
+    try {
+      if (
+        typeof window !== "undefined" &&
         window.ReduxStore &&
         window.ReduxStore.getState
       ) {
         const state = window.ReduxStore.getState();
-        const currentLocale = state.locales?.locale;
-        
-        if (currentLocale && currentLocale !== lastKnownLocale) {
-          lastKnownLocale = currentLocale;
-          console.log("Redux locale changed to:", currentLocale);
-          
-          const newLang = currentLocale.toLowerCase().startsWith("de") ? "de" : "en";
-          if (newLang !== currentLang) {
-            currentLang = newLang;
-            console.log("Extension language updated to:", currentLang);
-            console.warn("Extension translations will apply after reload");
-          }
-        }
+        const reduxLocale = state.locales?.locale;
+        results.reduxStore = reduxLocale;
+        console.log("8. Redux store locale:", reduxLocale);
+      } else {
+        results.reduxStore = "not available";
+        console.log("8. Redux store: NOT AVAILABLE");
       }
     } catch (e) {
-      // Silently fail
+      results.reduxStore = "error: " + e.message;
+      console.log("8. Redux store: ERROR", e.message);
     }
-  }, 1000); // Check every second
-}
 
-// Translation function (unchanged)
-function t(key) {
-  return translations[currentLang][key] || translations["en"][key] || key;
-}
+    // Method 9: Check global window._locale (some Scratch forks use this)
+    try {
+      if (typeof window !== "undefined" && window._locale) {
+        results.windowLocale = window._locale;
+        console.log("9. window._locale:", window._locale);
+      } else {
+        results.windowLocale = "not available";
+        console.log("9. window._locale: NOT AVAILABLE");
+      }
+    } catch (e) {
+      results.windowLocale = "error: " + e.message;
+      console.log("9. window._locale: ERROR", e.message);
+    }
+
+    // Method 10: Check meta tags
+    try {
+      const metaLang = document.querySelector(
+        'meta[http-equiv="content-language"]',
+      );
+      const metaContent = metaLang ? metaLang.getAttribute("content") : null;
+      results.metaTag = metaContent;
+      console.log("10. Meta tag content-language:", metaContent);
+    } catch (e) {
+      results.metaTag = "error: " + e.message;
+      console.log("10. Meta tag: ERROR", e.message);
+    }
+
+    console.log("\n=== ALL DETECTION RESULTS ===");
+    console.log(JSON.stringify(results, null, 2));
+
+    // Decision logic - Priority order
+    console.log("\n=== DECISION LOGIC ===");
+
+    // Priority 1: Redux store (most reliable for TurboWarp)
+    if (
+      results.reduxStore &&
+      typeof results.reduxStore === "string" &&
+      !results.reduxStore.includes("error")
+    ) {
+      console.log("✓ Using Redux store locale:", results.reduxStore);
+      finalLanguage = results.reduxStore.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 2: Scratch VM locale
+    else if (
+      results.scratchVMLocale &&
+      typeof results.scratchVMLocale === "string" &&
+      !results.scratchVMLocale.includes("error")
+    ) {
+      console.log("✓ Using Scratch VM locale:", results.scratchVMLocale);
+      finalLanguage = results.scratchVMLocale.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 3: TurboWarp localStorage
+    else if (
+      results.turboWarpLocalStorage &&
+      typeof results.turboWarpLocalStorage === "string" &&
+      !results.turboWarpLocalStorage.includes("error")
+    ) {
+      console.log(
+        "✓ Using TurboWarp localStorage:",
+        results.turboWarpLocalStorage,
+      );
+      finalLanguage = results.turboWarpLocalStorage
+        .toLowerCase()
+        .startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 4: document.documentElement.lang
+    else if (
+      results.documentLang &&
+      typeof results.documentLang === "string" &&
+      results.documentLang !== "" &&
+      !results.documentLang.includes("error")
+    ) {
+      console.log(
+        "✓ Using document.documentElement.lang:",
+        results.documentLang,
+      );
+      finalLanguage = results.documentLang.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 5: URL parameter
+    else if (
+      results.urlParameter &&
+      typeof results.urlParameter === "string" &&
+      !results.urlParameter.includes("error")
+    ) {
+      console.log("✓ Using URL parameter:", results.urlParameter);
+      finalLanguage = results.urlParameter.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 6: navigator.language
+    else if (
+      results.navigatorLanguage &&
+      typeof results.navigatorLanguage === "string" &&
+      !results.navigatorLanguage.includes("error")
+    ) {
+      console.log("✓ Using navigator.language:", results.navigatorLanguage);
+      finalLanguage = results.navigatorLanguage.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 7: First entry in navigator.languages
+    else if (
+      results.navigatorLanguages &&
+      Array.isArray(results.navigatorLanguages) &&
+      results.navigatorLanguages.length > 0
+    ) {
+      console.log(
+        "✓ Using navigator.languages[0]:",
+        results.navigatorLanguages[0],
+      );
+      finalLanguage = results.navigatorLanguages[0]
+        .toLowerCase()
+        .startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Fallback: Default to English
+    else {
+      console.log("✗ No locale detected, using default: en");
+      finalLanguage = "en";
+    }
+
+    console.log("\n=== FINAL DECISION ===");
+    console.log("Selected language:", finalLanguage);
+    console.log("================================\n");
+
+    // Store results for debugging
+    if (typeof window !== "undefined") {
+      window._ev3LanguageDetection = {
+        timestamp: new Date().toISOString(),
+        results: results,
+        finalLanguage: finalLanguage,
+      };
+      console.log("Debug info stored in: window._ev3LanguageDetection");
+    }
+
+    return finalLanguage;
+  }
+
+  // Detect language on load
+  let currentLang = detectLanguage();
+
+  // Re-detect if language changes (listen for changes)
+  if (typeof window !== "undefined") {
+    // Listen for localStorage changes (for TurboWarp language switches)
+    window.addEventListener("storage", (e) => {
+      if (e.key === "tw:language") {
+        console.log("TurboWarp language changed, re-detecting...");
+        const newLang = detectLanguage();
+        if (newLang !== currentLang) {
+          currentLang = newLang;
+          console.log("Language updated to:", currentLang);
+          // Note: Extension would need to reload to apply new translations
+          console.warn("Extension translations will apply after reload");
+        }
+      }
+    });
+
+    // Watch for Redux state changes
+    let lastKnownLocale = null;
+    setInterval(() => {
+      try {
+        if (window.ReduxStore && window.ReduxStore.getState) {
+          const state = window.ReduxStore.getState();
+          const currentLocale = state.locales?.locale;
+
+          if (currentLocale && currentLocale !== lastKnownLocale) {
+            lastKnownLocale = currentLocale;
+            console.log("Redux locale changed to:", currentLocale);
+
+            const newLang = currentLocale.toLowerCase().startsWith("de")
+              ? "de"
+              : "en";
+            if (newLang !== currentLang) {
+              currentLang = newLang;
+              console.log("Extension language updated to:", currentLang);
+              console.warn("Extension translations will apply after reload");
+            }
+          }
+        }
+      } catch (e) {
+        // Silently fail
+      }
+    }, 1000); // Check every second
+  }
+
+  // Translation function (unchanged)
+  function t(key) {
+    return translations[currentLang][key] || translations["en"][key] || key;
+  }
 
   // ============================================================================
   // MAIN EXTENSION CLASS
@@ -506,7 +527,6 @@ function t(key) {
 
   class ScratchToEV3 {
     constructor() {
-
       // Constants:
       this.REQUEST_TIMEOUT_MS = 5000;
       this.LONG_TIMEOUT_MS = 60000; // 60 seconds for blocking operations
@@ -515,7 +535,7 @@ function t(key) {
       this.MAX_SOUND_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
       this.RETRY_DELAY_BASE_MS = 1000;
       this.MAX_RETRY_DELAY_MS = 5000;
-      
+
       // Transpiler state
       this.pythonCode = "";
       this.indentLevel = 0;
@@ -554,8 +574,8 @@ function t(key) {
      */
     startSensorCacheCleanup() {
       // Only clean if we have entries
-      const CLEANUP_INTERVAL_MS = 5000;  // Check every 5 seconds
-      const MAX_CACHE_AGE_MS = 1000;     // Remove entries older than 1 second
+      const CLEANUP_INTERVAL_MS = 5000; // Check every 5 seconds
+      const MAX_CACHE_AGE_MS = 1000; // Remove entries older than 1 second
 
       this.sensorCacheCleanupTimer = setInterval(() => {
         const now = Date.now();
@@ -571,7 +591,7 @@ function t(key) {
         if (removed > 0) {
           this.log("Sensor cache cleanup", {
             removed,
-            remaining: Object.keys(this.sensorCache).length
+            remaining: Object.keys(this.sensorCache).length,
           });
         }
       }, CLEANUP_INTERVAL_MS);
@@ -579,7 +599,7 @@ function t(key) {
       // Store timer ID so we can clear it if needed
       this.log("Sensor cache cleanup started", {
         interval: CLEANUP_INTERVAL_MS,
-        maxAge: MAX_CACHE_AGE_MS
+        maxAge: MAX_CACHE_AGE_MS,
       });
     }
 
@@ -601,10 +621,14 @@ function t(key) {
       if (typeof window !== "undefined" && window._ev3LanguageDetection) {
         return JSON.stringify(window._ev3LanguageDetection, null, 2);
       }
-      return JSON.stringify({
-        currentLang: currentLang,
-        message: "No detection info available. Reload extension to detect."
-      }, null, 2);
+      return JSON.stringify(
+        {
+          currentLang: currentLang,
+          message: "No detection info available. Reload extension to detect.",
+        },
+        null,
+        2,
+      );
     }
 
     /**
@@ -717,7 +741,7 @@ function t(key) {
             blockType: Scratch.BlockType.COMMAND,
             text: t("downloadUploader"),
           },
-          
+
           "---",
 
           {
@@ -1612,7 +1636,11 @@ function t(key) {
       this.log("Testing connection", { ip: this.ev3IP });
       try {
         const url = this.getEV3URL("/");
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, 2000);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          2000,
+        );
         const data = await response.json();
         this.log("Connection test result", data);
         return data.status === "ev3_bridge_active" ? t("connected") : "Error";
@@ -1655,7 +1683,7 @@ function t(key) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             },
-            currentTimeout // Use the dynamic timeout
+            currentTimeout, // Use the dynamic timeout
           );
 
           if (!response.ok) {
@@ -1685,7 +1713,7 @@ function t(key) {
             // Exponential backoff
             const delay = Math.min(
               this.RETRY_DELAY_BASE_MS * Math.pow(2, attempt),
-              this.MAX_RETRY_DELAY_MS
+              this.MAX_RETRY_DELAY_MS,
             );
             this.log("Retrying after delay", { delay, attempt: attempt + 1 });
             await new Promise((resolve) => setTimeout(resolve, delay));
@@ -1730,40 +1758,40 @@ function t(key) {
         this.log("Preparing upload", {
           scriptName,
           codeSize: this.pythonCode.length,
-          soundCount
+          soundCount,
         });
 
         // 3. Upload script
         this.log("Uploading script...");
         await this.uploadScriptCode(scriptName, this.pythonCode);
-        
+
         // 4. Upload sounds if any
         if (soundCount > 0) {
           this.log("Uploading sounds...");
-          
+
           const uploadResults = await this.uploadSoundFiles(soundAssets);
-          
+
           if (uploadResults.errors.length > 0) {
             const errorMsg = uploadResults.errors
-              .map(e => `${e.fileName}: ${e.error}`)
-              .join('\n');
-            
+              .map((e) => `${e.fileName}: ${e.error}`)
+              .join("\n");
+
             this.log("Some sounds failed to upload", {
               failed: uploadResults.errors.length,
-              successful: uploadResults.results.length
+              successful: uploadResults.results.length,
             });
-            
+
             // Ask user if they want to continue
             const continueAnyway = confirm(
-              `${uploadResults.errors.length} sound(s) failed to upload:\n\n${errorMsg}\n\nContinue running script anyway?`
+              `${uploadResults.errors.length} sound(s) failed to upload:\n\n${errorMsg}\n\nContinue running script anyway?`,
             );
-            
+
             if (!continueAnyway) {
               return;
             }
           } else {
             this.log("All sounds uploaded successfully", {
-              count: soundCount
+              count: soundCount,
             });
           }
         }
@@ -1776,22 +1804,21 @@ function t(key) {
           this.log("Upload and run complete", {
             scriptName,
             scriptId,
-            soundsUploaded: soundCount
+            soundsUploaded: soundCount,
           });
-          
+
           alert(
             `✓ Script uploaded and running!\n\n` +
-            `Script: ${scriptName}\n` +
-            `Script ID: ${scriptId}\n` +
-            `Sounds: ${soundCount} uploaded`
+              `Script: ${scriptName}\n` +
+              `Script ID: ${scriptId}\n` +
+              `Sounds: ${soundCount} uploaded`,
           );
         }
-
       } catch (error) {
         this.log("Upload and run failed", {
           scriptName: args.NAME,
           error: error.message,
-          stack: error.stack
+          stack: error.stack,
         });
         alert(`Failed to upload and run: ${error.message}`);
       }
@@ -1820,24 +1847,24 @@ function t(key) {
 
         // 3. Upload script
         await this.uploadScriptCode(scriptName, this.pythonCode);
-        
+
         // 4. Upload sounds if any
         if (soundCount > 0) {
           const uploadResults = await this.uploadSoundFiles(soundAssets);
-          
+
           if (uploadResults.errors.length > 0) {
             const errorList = uploadResults.errors
-              .map(e => `- ${e.fileName}: ${e.error}`)
-              .join('\n');
-            
+              .map((e) => `- ${e.fileName}: ${e.error}`)
+              .join("\n");
+
             alert(
-              `Script uploaded, but ${uploadResults.errors.length} sound(s) failed:\n\n${errorList}`
+              `Script uploaded, but ${uploadResults.errors.length} sound(s) failed:\n\n${errorList}`,
             );
           } else {
             alert(
               `✓ Upload complete!\n\n` +
-              `Script: ${scriptName}\n` +
-              `Sounds: ${soundCount} uploaded`
+                `Script: ${scriptName}\n` +
+                `Sounds: ${soundCount} uploaded`,
             );
           }
         } else {
@@ -1846,14 +1873,13 @@ function t(key) {
 
         this.log("Upload complete", {
           scriptName,
-          soundsUploaded: soundCount
+          soundsUploaded: soundCount,
         });
-
       } catch (error) {
         this.log("Upload failed", {
           scriptName: args.NAME,
           error: error.message,
-          stack: error.stack
+          stack: error.stack,
         });
         alert(`Upload failed: ${error.message}`);
       }
@@ -1868,7 +1894,11 @@ function t(key) {
      */
     validateScriptName(scriptName, allowEmpty = false) {
       // Handle empty names
-      if (!scriptName || typeof scriptName !== 'string' || scriptName.trim() === '') {
+      if (
+        !scriptName ||
+        typeof scriptName !== "string" ||
+        scriptName.trim() === ""
+      ) {
         if (allowEmpty) {
           return "scratch_program.py";
         }
@@ -1878,16 +1908,16 @@ function t(key) {
       const trimmed = scriptName.trim();
 
       // Check extension
-      if (!trimmed.endsWith('.py')) {
+      if (!trimmed.endsWith(".py")) {
         throw new Error("Script must have .py extension");
       }
 
       // Check for path traversal
-      if (trimmed.includes('/') || trimmed.includes('\\')) {
+      if (trimmed.includes("/") || trimmed.includes("\\")) {
         throw new Error("Script name cannot contain path separators");
       }
 
-      if (trimmed.includes('..')) {
+      if (trimmed.includes("..")) {
         throw new Error("Script name cannot contain '..'");
       }
 
@@ -1896,7 +1926,8 @@ function t(key) {
         throw new Error("Filename too long (max 255 characters)");
       }
 
-      if (trimmed.length < 4) { // Minimum: "a.py"
+      if (trimmed.length < 4) {
+        // Minimum: "a.py"
         throw new Error("Filename too short");
       }
 
@@ -1904,12 +1935,12 @@ function t(key) {
       const sanitized = trimmed.replace(/[^a-zA-Z0-9._-]/g, "_");
 
       // Ensure doesn't start with dot or hyphen
-      if (sanitized.startsWith('.') || sanitized.startsWith('-')) {
+      if (sanitized.startsWith(".") || sanitized.startsWith("-")) {
         throw new Error("Filename cannot start with '.' or '-'");
       }
 
       // Ensure proper extension after sanitization
-      if (!sanitized.endsWith('.py')) {
+      if (!sanitized.endsWith(".py")) {
         throw new Error("Invalid characters resulted in corrupted filename");
       }
 
@@ -1917,7 +1948,7 @@ function t(key) {
       if (sanitized !== trimmed) {
         this.log("Sanitized filename", {
           original: trimmed,
-          sanitized: sanitized
+          sanitized: sanitized,
         });
       }
 
@@ -1928,22 +1959,26 @@ function t(key) {
      * Validate sound filename
      */
     validateSoundName(fileName) {
-      if (!fileName || typeof fileName !== 'string' || fileName.trim() === '') {
+      if (!fileName || typeof fileName !== "string" || fileName.trim() === "") {
         throw new Error("Sound name cannot be empty");
       }
 
       const trimmed = fileName.trim();
 
       // Check extension
-      const validExtensions = ['.wav', '.mp3', '.ogg'];
-      const hasValidExt = validExtensions.some(ext => trimmed.endsWith(ext));
-      
+      const validExtensions = [".wav", ".mp3", ".ogg"];
+      const hasValidExt = validExtensions.some((ext) => trimmed.endsWith(ext));
+
       if (!hasValidExt) {
-        throw new Error(`Sound must be ${validExtensions.join(', ')} format`);
+        throw new Error(`Sound must be ${validExtensions.join(", ")} format`);
       }
 
       // Check for path traversal
-      if (trimmed.includes('/') || trimmed.includes('\\') || trimmed.includes('..')) {
+      if (
+        trimmed.includes("/") ||
+        trimmed.includes("\\") ||
+        trimmed.includes("..")
+      ) {
         throw new Error("Sound name cannot contain path separators");
       }
 
@@ -1955,7 +1990,7 @@ function t(key) {
       // Sanitize
       const sanitized = trimmed.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-      if (sanitized.startsWith('.') || sanitized.startsWith('-')) {
+      if (sanitized.startsWith(".") || sanitized.startsWith("-")) {
         throw new Error("Filename cannot start with '.' or '-'");
       }
 
@@ -1963,11 +1998,11 @@ function t(key) {
     }
 
     /**
-    * Upload script code to EV3
-    * @param {string} scriptName - Name of the script file
-    * @param {string} code - Python code to upload
-    * @returns {Promise<Object>} Server response with status
-    */
+     * Upload script code to EV3
+     * @param {string} scriptName - Name of the script file
+     * @param {string} code - Python code to upload
+     * @returns {Promise<Object>} Server response with status
+     */
     async uploadScriptCode(scriptName, code) {
       this.log("Uploading script code", {
         scriptName,
@@ -1989,7 +2024,9 @@ function t(key) {
         }
 
         if (code.length > this.MAX_CODE_SIZE_BYTES) {
-          throw new Error(`Code too large (max ${this.MAX_CODE_SIZE_BYTES / 1024}KB)`);
+          throw new Error(
+            `Code too large (max ${this.MAX_CODE_SIZE_BYTES / 1024}KB)`,
+          );
         }
 
         // Upload to EV3
@@ -2005,11 +2042,11 @@ function t(key) {
               code: code,
             }),
           },
-          this.UPLOAD_TIMEOUT_MS 
+          this.UPLOAD_TIMEOUT_MS,
         );
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`); 
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const result = await response.json();
@@ -2027,14 +2064,13 @@ function t(key) {
 
         // ✅ Return full result object
         return result;
-
       } catch (error) {
         this.log("Script upload failed", {
           scriptName,
           error: error.message,
           stack: error.stack,
         });
-        
+
         // Re-throw so caller can handle
         throw error;
       }
@@ -2065,7 +2101,7 @@ function t(key) {
               name: scriptName,
             }),
           },
-          this.REQUEST_TIMEOUT_MS
+          this.REQUEST_TIMEOUT_MS,
         );
 
         if (!response.ok) {
@@ -2076,18 +2112,17 @@ function t(key) {
 
         if (result.status === "ok" && result.script_id !== undefined) {
           this.currentScriptId = result.script_id;
-          
+
           this.log("Script started successfully", {
             scriptName,
             scriptId: result.script_id,
             response: result,
           });
-          
+
           return result.script_id;
         } else {
           throw new Error(result.msg || "Run failed");
         }
-
       } catch (error) {
         this.log("Run script failed", {
           scriptName: args.NAME,
@@ -2138,7 +2173,7 @@ function t(key) {
               script_id: scriptId,
             }),
           },
-          5000
+          5000,
         );
 
         if (!response.ok) {
@@ -2148,7 +2183,10 @@ function t(key) {
         const result = await response.json();
 
         if (result.status === "ok") {
-          this.log("Script stopped successfully", { scriptId, response: result });
+          this.log("Script stopped successfully", {
+            scriptId,
+            response: result,
+          });
 
           if (this.currentScriptId === scriptId) {
             this.currentScriptId = null;
@@ -2185,7 +2223,7 @@ function t(key) {
               cmd: "stop_all_scripts",
             }),
           },
-          5000
+          5000,
         );
 
         if (!response.ok) {
@@ -2220,7 +2258,6 @@ function t(key) {
       });
 
       try {
-
         const url = this.getEV3URL("/");
         const response = await this.fetchWithTimeout(
           url,
@@ -2232,7 +2269,7 @@ function t(key) {
               name: scriptName,
             }),
           },
-          this.REQUEST_TIMEOUT_MS
+          this.REQUEST_TIMEOUT_MS,
         );
 
         if (!response.ok) {
@@ -2265,9 +2302,13 @@ function t(key) {
      */
     async refreshScriptList() {
       try {
-        const url = this.getEV3URL("/scripts"); 
+        const url = this.getEV3URL("/scripts");
 
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, this.REQUEST_TIMEOUT_MS);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          this.REQUEST_TIMEOUT_MS,
+        );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -2291,7 +2332,11 @@ function t(key) {
       try {
         const url = this.getEV3URL("/scripts");
 
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, this.REQUEST_TIMEOUT_MS);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          this.REQUEST_TIMEOUT_MS,
+        );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -2321,7 +2366,11 @@ function t(key) {
         }
 
         const url = this.getEV3URL(`/script/${scriptId}/logs?max=${maxLines}`);
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, 5000);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          5000,
+        );
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2351,7 +2400,11 @@ function t(key) {
       try {
         const url = this.getEV3URL("/scripts");
 
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, this.REQUEST_TIMEOUT_MS);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          this.REQUEST_TIMEOUT_MS,
+        );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -2375,7 +2428,11 @@ function t(key) {
       try {
         const url = this.getEV3URL("/scripts");
 
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, this.REQUEST_TIMEOUT_MS);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          this.REQUEST_TIMEOUT_MS,
+        );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -2401,7 +2458,11 @@ function t(key) {
       try {
         const url = this.getEV3URL("/scripts");
 
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, this.REQUEST_TIMEOUT_MS);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          this.REQUEST_TIMEOUT_MS,
+        );
 
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2417,7 +2478,7 @@ function t(key) {
       } catch (error) {
         this.log("Check script running error", {
           scriptName: args.NAME,
-          error: error.message
+          error: error.message,
         });
         return false;
       }
@@ -2459,14 +2520,14 @@ function t(key) {
         const estimatedSize = (base64Data.length * 3) / 4; // Base64 overhead
         if (estimatedSize > this.MAX_SOUND_SIZE_BYTES) {
           throw new Error(
-            `Sound file too large (max ${this.MAX_SOUND_SIZE_BYTES / (1024 * 1024)}MB)`
+            `Sound file too large (max ${this.MAX_SOUND_SIZE_BYTES / (1024 * 1024)}MB)`,
           );
         }
 
         this.log("Encoded sound to base64", {
           fileName: safeName,
           base64Length: base64Data.length,
-          estimatedSizeKB: Math.round(estimatedSize / 1024)
+          estimatedSizeKB: Math.round(estimatedSize / 1024),
         });
 
         const url = this.getEV3URL("/");
@@ -2481,7 +2542,7 @@ function t(key) {
               data: base64Data,
             }),
           },
-          this.UPLOAD_TIMEOUT_MS
+          this.UPLOAD_TIMEOUT_MS,
         );
 
         if (!response.ok) {
@@ -2530,7 +2591,7 @@ function t(key) {
      */
     async uploadSoundFiles(soundFileMap) {
       const fileCount = Object.keys(soundFileMap).length;
-      
+
       this.log("Starting batch sound upload", { count: fileCount });
 
       const results = [];
@@ -2542,17 +2603,18 @@ function t(key) {
 
       for (const [fileName, audioData] of Object.entries(soundFileMap)) {
         progress++;
-        
+
         try {
           console.log(`[${progress}/${fileCount}] Uploading ${fileName}...`);
-          
+
           const result = await this.uploadSoundFile(fileName, audioData);
           results.push(result);
-          
+
           console.log(`[${progress}/${fileCount}] ✓ ${fileName}`);
-          
         } catch (error) {
-          console.error(`[${progress}/${fileCount}] ✗ ${fileName}: ${error.message}`);
+          console.error(
+            `[${progress}/${fileCount}] ✗ ${fileName}: ${error.message}`,
+          );
           errors.push({ fileName, error: error.message });
         }
       }
@@ -2561,12 +2623,11 @@ function t(key) {
         total: fileCount,
         successful: results.length,
         failed: errors.length,
-        errors
+        errors,
       });
 
       return { results, errors };
     }
-
 
     // ============================================================================
     // HELPER: SHOW SCRIPT MANAGER UI
@@ -2632,7 +2693,11 @@ function t(key) {
 
       try {
         const url = this.getEV3URL("/");
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, this.REQUEST_TIMEOUT_MS);
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          this.REQUEST_TIMEOUT_MS,
+        );
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -2836,21 +2901,26 @@ function t(key) {
     clampSpeed(speed) {
       return Math.max(-100, Math.min(100, speed));
     }
-    
+
     // Motors
     ev3MotorRun(args) {
-      this.sendCommand("motor_run", { 
-        port: args.PORT, 
-        speed: this.clampSpeed(args.SPEED) 
+      this.sendCommand("motor_run", {
+        port: args.PORT,
+        speed: this.clampSpeed(args.SPEED),
       });
     }
 
     ev3MotorRunFor(args) {
-      this.sendCommand("motor_run_for", {
-        port: args.PORT,
-        speed: this.clampSpeed(args.SPEED),
-        rotations: args.ROTATIONS,
-      }, 1, this.LONG_TIMEOUT_MS); // long timeout
+      this.sendCommand(
+        "motor_run_for",
+        {
+          port: args.PORT,
+          speed: this.clampSpeed(args.SPEED),
+          rotations: args.ROTATIONS,
+        },
+        1,
+        this.LONG_TIMEOUT_MS,
+      ); // long timeout
     }
 
     ev3MotorStop(args) {
@@ -2858,11 +2928,16 @@ function t(key) {
     }
 
     ev3TankDrive(args) {
-      this.sendCommand("tank_drive", {
-        left: this.clampSpeed(args.LEFT),   
-        right: this.clampSpeed(args.RIGHT), 
-        rotations: args.ROTATIONS,
-      }, 1, this.LONG_TIMEOUT_MS); // long timeout
+      this.sendCommand(
+        "tank_drive",
+        {
+          left: this.clampSpeed(args.LEFT),
+          right: this.clampSpeed(args.RIGHT),
+          rotations: args.ROTATIONS,
+        },
+        1,
+        this.LONG_TIMEOUT_MS,
+      ); // long timeout
     }
 
     async getSensorData(endpoint) {
@@ -2870,10 +2945,10 @@ function t(key) {
       const cached = this.sensorCache[endpoint];
 
       // Return cached if fresh
-      if (cached && (now - cached.timestamp) < this.SENSOR_CACHE_MS) {
+      if (cached && now - cached.timestamp < this.SENSOR_CACHE_MS) {
         return cached.data;
       }
-      
+
       if (!this.streamingMode) {
         this.log("Sensor read skipped - streaming disabled", { endpoint });
         return { value: 0 };
@@ -2883,21 +2958,25 @@ function t(key) {
       this.log("Reading sensor", { endpoint, url });
 
       try {
-        const response = await this.fetchWithTimeout(url, { method: "GET" }, 5000);
-        
+        const response = await this.fetchWithTimeout(
+          url,
+          { method: "GET" },
+          5000,
+        );
+
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         this.log("Sensor data", { endpoint, data });
 
         // Cache result
         this.sensorCache[endpoint] = {
           data,
-          timestamp: now
+          timestamp: now,
         };
-        
+
         return data;
       } catch (error) {
         this.log("Sensor read failed", { endpoint, error: error.message });
@@ -3026,7 +3105,12 @@ function t(key) {
       const hasUmlauts = /[äöüÄÖÜß]/.test(text);
       const lang = hasUmlauts || currentLang === "de" ? "de" : "en";
 
-      this.sendCommand("speak", { text: text, lang: lang }, 1, this.LONG_TIMEOUT_MS); // long timeout
+      this.sendCommand(
+        "speak",
+        { text: text, lang: lang },
+        1,
+        this.LONG_TIMEOUT_MS,
+      ); // long timeout
     }
 
     ev3Beep(args) {
@@ -3110,48 +3194,47 @@ function t(key) {
           if (!target.sprite || !target.sprite.sounds) continue;
 
           for (const sound of target.sprite.sounds) {
-            const baseName = sound.name.replace(/\.(wav|mp3|ogg)$/i, '');
-            const soundName = this.sanitizeSoundName(baseName + '.wav');
-            
+            const baseName = sound.name.replace(/\.(wav|mp3|ogg)$/i, "");
+            const soundName = this.sanitizeSoundName(baseName + ".wav");
+
             // Skip if already collected
             if (soundAssets[soundName]) continue;
 
             try {
               // Get sound asset from runtime
               const asset = runtime.storage.get(sound.assetId);
-              
+
               if (asset && asset.data) {
                 soundAssets[soundName] = asset.data;
                 this.log("Extracted sound asset", {
                   name: soundName,
                   assetId: sound.assetId,
-                  size: asset.data.byteLength
+                  size: asset.data.byteLength,
                 });
               } else {
                 this.log("Sound asset not found", {
                   name: sound.name,
-                  assetId: sound.assetId
+                  assetId: sound.assetId,
                 });
               }
             } catch (error) {
               this.log("Error extracting sound", {
                 name: sound.name,
-                error: error.message
+                error: error.message,
               });
             }
           }
         }
 
         this.log("Sound extraction complete", {
-          count: Object.keys(soundAssets).length
+          count: Object.keys(soundAssets).length,
         });
 
         return soundAssets;
-
       } catch (error) {
         this.log("Sound extraction failed", {
           error: error.message,
-          stack: error.stack
+          stack: error.stack,
         });
         return {};
       }
@@ -3194,49 +3277,62 @@ function t(key) {
 
         // Valid note pattern: A-G, optional sharp/flat, octave 0-8
         const notePattern = /^[A-Ga-g][#b]?[0-8]$/;
-        
+
         // Valid duration symbols
-        const validDurations = ['w', 'h', 'q', 'e', 's', 'dw', 'dh', 'dq', 'de', 'ds'];
+        const validDurations = [
+          "w",
+          "h",
+          "q",
+          "e",
+          "s",
+          "dw",
+          "dh",
+          "dq",
+          "de",
+          "ds",
+        ];
 
         // Validate each note
         for (let i = 0; i < notes.length; i++) {
           const note = notes[i];
-          
+
           if (!Array.isArray(note)) {
             throw new Error(`Note ${i} must be an array [note, duration]`);
           }
 
           if (note.length !== 2) {
             throw new Error(
-              `Note ${i} must have exactly 2 values [note, duration], got ${note.length}`
+              `Note ${i} must have exactly 2 values [note, duration], got ${note.length}`,
             );
           }
 
           const [noteName, duration] = note;
 
           // Validate note name
-          if (typeof noteName !== 'string' || noteName.trim() === '') {
-            throw new Error(`Note ${i}: note name must be a non-empty string, got "${noteName}"`);
+          if (typeof noteName !== "string" || noteName.trim() === "") {
+            throw new Error(
+              `Note ${i}: note name must be a non-empty string, got "${noteName}"`,
+            );
           }
 
           const trimmedNote = noteName.trim();
           if (!notePattern.test(trimmedNote)) {
             throw new Error(
-              `Note ${i}: invalid note "${trimmedNote}". Use format: C4, F#5, Bb3 (note + optional #/b + octave 0-8)`
+              `Note ${i}: invalid note "${trimmedNote}". Use format: C4, F#5, Bb3 (note + optional #/b + octave 0-8)`,
             );
           }
 
           // Validate duration
-          if (typeof duration !== 'string' || duration.trim() === '') {
+          if (typeof duration !== "string" || duration.trim() === "") {
             throw new Error(
-              `Note ${i}: duration must be a non-empty string, got "${duration}"`
+              `Note ${i}: duration must be a non-empty string, got "${duration}"`,
             );
           }
 
           const trimmedDuration = duration.trim().toLowerCase();
           if (!validDurations.includes(trimmedDuration)) {
             throw new Error(
-              `Note ${i}: invalid duration "${trimmedDuration}". Valid: w (whole), h (half), q (quarter), e (eighth), s (sixteenth), or add 'd' for dotted (dq, dh, etc.)`
+              `Note ${i}: invalid duration "${trimmedDuration}". Valid: w (whole), h (half), q (quarter), e (eighth), s (sixteenth), or add 'd' for dotted (dq, dh, etc.)`,
             );
           }
         }
@@ -3251,38 +3347,51 @@ function t(key) {
         this.sendCommand("play_song", { notes, tempo });
 
         // Calculate estimated duration for logging
-        const durationMap = { w: 4, dw: 6, h: 2, dh: 3, q: 1, dq: 1.5, e: 0.5, de: 0.75, s: 0.25, ds: 0.375 };
-        const totalBeats = notes.reduce((sum, [, dur]) => sum + (durationMap[dur.toLowerCase()] || 1), 0);
+        const durationMap = {
+          w: 4,
+          dw: 6,
+          h: 2,
+          dh: 3,
+          q: 1,
+          dq: 1.5,
+          e: 0.5,
+          de: 0.75,
+          s: 0.25,
+          ds: 0.375,
+        };
+        const totalBeats = notes.reduce(
+          (sum, [, dur]) => sum + (durationMap[dur.toLowerCase()] || 1),
+          0,
+        );
         const estimatedSeconds = (totalBeats * 60) / tempo;
 
         this.log("Playing song", {
           noteCount: notes.length,
           tempo,
-          estimatedDuration: Math.round(estimatedSeconds * 10) / 10 + "s"
+          estimatedDuration: Math.round(estimatedSeconds * 10) / 10 + "s",
         });
-
       } catch (error) {
         this.log("Invalid song", {
           error: error.message,
-          song: args.SONG
+          song: args.SONG,
         });
 
         // User-friendly error message
         alert(
           `Invalid song: ${error.message}\n\n` +
-          `Format: [["note", "duration"], ...]\n` +
-          `Example: [["C4","q"], ["D4","h"], ["E4","w"]]\n\n` +
-          `Notes:\n` +
-          `- Use A-G with optional # or b\n` +
-          `- Add octave 0-8 (e.g., C4, F#5, Bb3)\n\n` +
-          `Durations:\n` +
-          `- w = whole note (4 beats)\n` +
-          `- h = half note (2 beats)\n` +
-          `- q = quarter note (1 beat)\n` +
-          `- e = eighth note (0.5 beats)\n` +
-          `- s = sixteenth note (0.25 beats)\n` +
-          `- Add 'd' for dotted (dq = dotted quarter)\n\n` +
-          `Tempo: 20-300 BPM`
+            `Format: [["note", "duration"], ...]\n` +
+            `Example: [["C4","q"], ["D4","h"], ["E4","w"]]\n\n` +
+            `Notes:\n` +
+            `- Use A-G with optional # or b\n` +
+            `- Add octave 0-8 (e.g., C4, F#5, Bb3)\n\n` +
+            `Durations:\n` +
+            `- w = whole note (4 beats)\n` +
+            `- h = half note (2 beats)\n` +
+            `- q = quarter note (1 beat)\n` +
+            `- e = eighth note (0.5 beats)\n` +
+            `- s = sixteenth note (0.25 beats)\n` +
+            `- Add 'd' for dotted (dq = dotted quarter)\n\n` +
+            `Tempo: 20-300 BPM`,
         );
       }
     }
@@ -3319,30 +3428,42 @@ function t(key) {
         // Validate each tone
         for (let i = 0; i < sequence.length; i++) {
           const tone = sequence[i];
-          
+
           if (!Array.isArray(tone)) {
             throw new Error(`Tone ${i} must be an array`);
           }
 
           if (tone.length !== 3) {
-            throw new Error(`Tone ${i} must have exactly 3 values [frequency, duration, delay]`);
+            throw new Error(
+              `Tone ${i} must have exactly 3 values [frequency, duration, delay]`,
+            );
           }
 
           const [freq, duration, delay] = tone;
 
           // Validate frequency (20-20000 Hz)
-          if (typeof freq !== 'number' || freq < 20 || freq > 20000) {
-            throw new Error(`Tone ${i}: frequency must be 20-20000 Hz, got ${freq}`);
+          if (typeof freq !== "number" || freq < 20 || freq > 20000) {
+            throw new Error(
+              `Tone ${i}: frequency must be 20-20000 Hz, got ${freq}`,
+            );
           }
 
           // Validate duration (1-10000 ms)
-          if (typeof duration !== 'number' || duration < 1 || duration > 10000) {
-            throw new Error(`Tone ${i}: duration must be 1-10000 ms, got ${duration}`);
+          if (
+            typeof duration !== "number" ||
+            duration < 1 ||
+            duration > 10000
+          ) {
+            throw new Error(
+              `Tone ${i}: duration must be 1-10000 ms, got ${duration}`,
+            );
           }
 
           // Validate delay (0-10000 ms)
-          if (typeof delay !== 'number' || delay < 0 || delay > 10000) {
-            throw new Error(`Tone ${i}: delay must be 0-10000 ms, got ${delay}`);
+          if (typeof delay !== "number" || delay < 0 || delay > 10000) {
+            throw new Error(
+              `Tone ${i}: delay must be 0-10000 ms, got ${delay}`,
+            );
           }
         }
 
@@ -3351,24 +3472,26 @@ function t(key) {
 
         this.log("Playing tone sequence", {
           toneCount: sequence.length,
-          totalDuration: sequence.reduce((sum, [, dur, delay]) => sum + dur + delay, 0)
+          totalDuration: sequence.reduce(
+            (sum, [, dur, delay]) => sum + dur + delay,
+            0,
+          ),
         });
-
       } catch (error) {
         this.log("Invalid tone sequence", {
           error: error.message,
-          sequence: args.SEQUENCE
+          sequence: args.SEQUENCE,
         });
 
         // User-friendly error message
         alert(
           `Invalid tone sequence: ${error.message}\n\n` +
-          `Format: [[frequency, duration_ms, delay_ms], ...]\n` +
-          `Example: [[440, 500, 100], [523, 500, 100]]\n\n` +
-          `Ranges:\n` +
-          `- Frequency: 20-20000 Hz\n` +
-          `- Duration: 1-10000 ms\n` +
-          `- Delay: 0-10000 ms`
+            `Format: [[frequency, duration_ms, delay_ms], ...]\n` +
+            `Example: [[440, 500, 100], [523, 500, 100]]\n\n` +
+            `Ranges:\n` +
+            `- Frequency: 20-20000 Hz\n` +
+            `- Duration: 1-10000 ms\n` +
+            `- Delay: 0-10000 ms`,
         );
       }
     }
@@ -3468,7 +3591,7 @@ function t(key) {
       this.usedMotors = new Set();
       this.usedSensors = new Set();
       this.spriteStates = {};
-      this.scriptCounter = 1;  // ← RESET at start of transpilation
+      this.scriptCounter = 1; // ← RESET at start of transpilation
 
       try {
         const runtime = Scratch.vm.runtime;
@@ -4202,7 +4325,9 @@ function t(key) {
       } else if (opcode === "scratchtoev3_ev3PlaySong") {
         const song = this.getInputValue(block, "SONG", blocks);
         const tempo = this.getInputValue(block, "TEMPO", blocks);
-        this.addLine("sound.play_song(json.loads(" + song + "), tempo=" + tempo + ")");
+        this.addLine(
+          "sound.play_song(json.loads(" + song + "), tempo=" + tempo + ")",
+        );
       } else if (opcode === "scratchtoev3_ev3PlayToneSequence") {
         const sequence = this.getInputValue(block, "SEQUENCE", blocks);
         this.addLine("sound.tone(json.loads(" + sequence + "))");

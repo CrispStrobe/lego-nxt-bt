@@ -1,10 +1,10 @@
-(function(Scratch) {
-  'use strict';
+(function (Scratch) {
+  "use strict";
 
   // Embed the CSP solver
   var CSP = {},
-      FAILURE = 'FAILURE',
-      stepCounter = 0;
+    FAILURE = "FAILURE",
+    stepCounter = 0;
 
   CSP.solve = function solve(csp) {
     csp = normalizeProblem(csp);
@@ -92,12 +92,13 @@
 
   function runAC3(variables, constraints) {
     function incomingConstraints(node) {
-      return constraints.filter(c => c[0] === node);
+      return constraints.filter((c) => c[0] === node);
     }
     function removeInconsistentValues(head, tail, predicate, vars) {
-      const hv = vars[head], tv = vars[tail];
+      const hv = vars[head],
+        tv = vars[tail];
       if (!hv || !tv) return false;
-      const validTailValues = tv.filter(t => hv.some(h => predicate(h, t)));
+      const validTailValues = tv.filter((t) => hv.some((h) => predicate(h, t)));
       const removed = validTailValues.length !== tv.length;
       vars[tail] = validTailValues;
       return removed;
@@ -132,7 +133,8 @@
     const index = csp._naryIndex || buildNaryIndex(csp.naryConstraints);
     while (queue.length) {
       const C = queue.shift();
-      if (!C || !Array.isArray(C.vars) || typeof C.predicate !== 'function') continue;
+      if (!C || !Array.isArray(C.vars) || typeof C.predicate !== "function")
+        continue;
       let changedAny = false;
       for (let vi = 0; vi < C.vars.length; vi++) {
         const varName = C.vars[vi];
@@ -179,7 +181,7 @@
       return da - db;
     });
     const order = [focusVar].concat(others);
-    const domains = [ [focusVal] ].concat(others.map(v => variables[v]));
+    const domains = [[focusVal]].concat(others.map((v) => variables[v]));
     const assign = {};
     function dfs(i) {
       if (i === order.length) {
@@ -202,12 +204,14 @@
   }
 
   function selectUnassignedVariable(unassigned) {
-    let minKey = null, minLen = Infinity;
+    let minKey = null,
+      minLen = Infinity;
     for (const key in unassigned) {
       const dom = unassigned[key];
       const len = Array.isArray(dom) ? dom.length : Infinity;
       if (len < minLen) {
-        minKey = key; minLen = len;
+        minKey = key;
+        minLen = len;
         if (len === 1) break;
       }
     }
@@ -239,7 +243,7 @@
         score[val] = countValues(res);
       }
     }
-    baseValues.sort((a, b) => (score[b] - score[a]));
+    baseValues.sort((a, b) => score[b] - score[a]);
     return baseValues;
   }
 
@@ -249,21 +253,27 @@
       constraints: [],
       naryConstraints: [],
       timeStep: csp.timeStep || 1,
-      cb: csp.cb
+      cb: csp.cb,
     };
     for (const k in csp.variables || {}) {
       const dom = csp.variables[k];
       out.variables[k] = Array.isArray(dom) ? dom.slice() : [];
     }
     if (Array.isArray(csp.constraints)) {
-      out.constraints = csp.constraints.slice().filter(c =>
-        Array.isArray(c) && c.length >= 3 && typeof c[2] === 'function'
-      );
+      out.constraints = csp.constraints
+        .slice()
+        .filter(
+          (c) =>
+            Array.isArray(c) && c.length >= 3 && typeof c[2] === "function",
+        );
     }
     if (Array.isArray(csp.naryConstraints)) {
-      out.naryConstraints = csp.naryConstraints.slice().filter(C =>
-        C && Array.isArray(C.vars) && typeof C.predicate === 'function'
-      );
+      out.naryConstraints = csp.naryConstraints
+        .slice()
+        .filter(
+          (C) =>
+            C && Array.isArray(C.vars) && typeof C.predicate === "function",
+        );
     }
     return out;
   }
@@ -277,24 +287,35 @@
     }
     for (let i = 0; i < csp.constraints.length; i++) {
       const c = csp.constraints[i];
-      const head = c[0], tail = c[1], pred = c[2];
-      if (!varsSet.has(head)) throw new Error('Binary constraint references unknown variable "' + head + '"');
-      if (!varsSet.has(tail)) throw new Error('Binary constraint references unknown variable "' + tail + '"');
-      if (typeof pred !== 'function') throw new Error('Binary constraint missing predicate function');
+      const head = c[0],
+        tail = c[1],
+        pred = c[2];
+      if (!varsSet.has(head))
+        throw new Error(
+          'Binary constraint references unknown variable "' + head + '"',
+        );
+      if (!varsSet.has(tail))
+        throw new Error(
+          'Binary constraint references unknown variable "' + tail + '"',
+        );
+      if (typeof pred !== "function")
+        throw new Error("Binary constraint missing predicate function");
     }
     for (let i = 0; i < csp.naryConstraints.length; i++) {
       const C = csp.naryConstraints[i];
       if (!Array.isArray(C.vars) || C.vars.length === 0) {
-        throw new Error('N-ary constraint missing vars array');
+        throw new Error("N-ary constraint missing vars array");
       }
       for (let j = 0; j < C.vars.length; j++) {
         const v = C.vars[j];
         if (!varsSet.has(v)) {
-          throw new Error('N-ary constraint references unknown variable "' + v + '"');
+          throw new Error(
+            'N-ary constraint references unknown variable "' + v + '"',
+          );
         }
       }
-      if (typeof C.predicate !== 'function') {
-        throw new Error('N-ary constraint missing predicate function');
+      if (typeof C.predicate !== "function") {
+        throw new Error("N-ary constraint missing predicate function");
       }
     }
   }
@@ -302,78 +323,78 @@
   // Extension-specific storage
   let currentProblem = {
     variables: {},
-    constraints: []
+    constraints: [],
   };
 
   class CSPExtension {
     getInfo() {
       return {
-        id: 'cspSolver',
-        name: 'CSP Solver',
+        id: "cspSolver",
+        name: "CSP Solver",
         blocks: [
           {
-            opcode: 'clearProblem',
+            opcode: "clearProblem",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'clear CSP problem'
+            text: "clear CSP problem",
           },
           {
-            opcode: 'addVariable',
+            opcode: "addVariable",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'add variable [NAME] with domain [DOMAIN]',
+            text: "add variable [NAME] with domain [DOMAIN]",
             arguments: {
               NAME: {
                 type: Scratch.ArgumentType.STRING,
-                defaultValue: 'x'
+                defaultValue: "x",
               },
               DOMAIN: {
                 type: Scratch.ArgumentType.STRING,
-                defaultValue: '[1,2,3,4,5,6,7,8,9]'
-              }
-            }
+                defaultValue: "[1,2,3,4,5,6,7,8,9]",
+              },
+            },
           },
           {
-            opcode: 'addConstraint',
+            opcode: "addConstraint",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'add constraint [VAR1] != [VAR2]',
+            text: "add constraint [VAR1] != [VAR2]",
             arguments: {
               VAR1: {
                 type: Scratch.ArgumentType.STRING,
-                defaultValue: 'x'
+                defaultValue: "x",
               },
               VAR2: {
                 type: Scratch.ArgumentType.STRING,
-                defaultValue: 'y'
-              }
-            }
+                defaultValue: "y",
+              },
+            },
           },
           {
-            opcode: 'solve',
+            opcode: "solve",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'solve CSP'
+            text: "solve CSP",
           },
           {
-            opcode: 'getVarValue',
+            opcode: "getVarValue",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'solution value of [VAR]',
+            text: "solution value of [VAR]",
             arguments: {
               VAR: {
                 type: Scratch.ArgumentType.STRING,
-                defaultValue: 'x'
-              }
-            }
+                defaultValue: "x",
+              },
+            },
           },
           {
-            opcode: 'solveSudoku',
+            opcode: "solveSudoku",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'solve sudoku [PUZZLE]',
+            text: "solve sudoku [PUZZLE]",
             arguments: {
               PUZZLE: {
                 type: Scratch.ArgumentType.STRING,
-                defaultValue: '{"1,1":5,"1,2":3}'
-              }
-            }
-          }
-        ]
+                defaultValue: '{"1,1":5,"1,2":3}',
+              },
+            },
+          },
+        ],
       };
     }
 
@@ -381,7 +402,7 @@
       currentProblem = {
         variables: {},
         constraints: [],
-        solution: null
+        solution: null,
       };
     }
 
@@ -390,12 +411,14 @@
         const domain = JSON.parse(args.DOMAIN);
         currentProblem.variables[args.NAME] = domain;
       } catch (e) {
-        console.error('Invalid domain JSON:', e);
+        console.error("Invalid domain JSON:", e);
       }
     }
 
     addConstraint(args) {
-      const neq = function(x, y) { return x !== y; };
+      const neq = function (x, y) {
+        return x !== y;
+      };
       currentProblem.constraints.push([args.VAR1, args.VAR2, neq]);
     }
 
@@ -403,18 +426,18 @@
       try {
         const result = CSP.solve(currentProblem);
         if (result === FAILURE) {
-          return 'FAILURE';
+          return "FAILURE";
         }
         currentProblem.solution = result;
         return JSON.stringify(result);
       } catch (e) {
-        return 'ERROR: ' + e.message;
+        return "ERROR: " + e.message;
       }
     }
 
     getVarValue(args) {
-      if (!currentProblem.solution) return '';
-      return currentProblem.solution[args.VAR] || '';
+      if (!currentProblem.solution) return "";
+      return currentProblem.solution[args.VAR] || "";
     }
 
     solveSudoku(args) {
@@ -425,31 +448,33 @@
         const domain = [1, 2, 3, 4, 5, 6, 7, 8, 9];
         const variables = {};
         const constraints = [];
-        
-        function neq(x, y) { return x !== y; }
-        
+
+        function neq(x, y) {
+          return x !== y;
+        }
+
         // Create variables
         for (let i = 1; i <= SIZE; i++) {
           for (let j = 1; j <= SIZE; j++) {
-            const key = i + ',' + j;
+            const key = i + "," + j;
             const filled = filledIn[key];
             variables[key] = filled ? [filled] : domain.slice();
           }
         }
-        
+
         // Add constraints
         for (let i = 1; i <= SIZE; i++) {
           for (let j = 1; j <= SIZE; j++) {
             // Row and column constraints
             for (let k = 1; k <= SIZE; k++) {
               if (k !== j) {
-                constraints.push([i + ',' + k, i + ',' + j, neq]);
+                constraints.push([i + "," + k, i + "," + j, neq]);
               }
               if (k !== i) {
-                constraints.push([k + ',' + j, i + ',' + j, neq]);
+                constraints.push([k + "," + j, i + "," + j, neq]);
               }
             }
-            
+
             // Block constraints
             const blockRow = Math.floor((i - 1) / BLOCK_SIZE);
             const blockCol = Math.floor((j - 1) / BLOCK_SIZE);
@@ -458,32 +483,32 @@
                 const ni = blockRow * BLOCK_SIZE + bi + 1;
                 const nj = blockCol * BLOCK_SIZE + bj + 1;
                 if (ni !== i || nj !== j) {
-                  constraints.push([ni + ',' + nj, i + ',' + j, neq]);
+                  constraints.push([ni + "," + nj, i + "," + j, neq]);
                 }
               }
             }
           }
         }
-        
+
         const result = CSP.solve({ variables, constraints });
-        if (result === FAILURE) return 'FAILURE';
-        
+        if (result === FAILURE) return "FAILURE";
+
         // Format output
-        let output = '';
-        const divider = '|' + '-'.repeat(35) + '|\n';
+        let output = "";
+        const divider = "|" + "-".repeat(35) + "|\n";
         output += divider;
         for (let i = 1; i <= SIZE; i++) {
-          let row = '| ';
+          let row = "| ";
           for (let j = 1; j <= SIZE; j++) {
-            row += result[i + ',' + j];
-            row += j % BLOCK_SIZE !== 0 ? '   ' : ' | ';
+            row += result[i + "," + j];
+            row += j % BLOCK_SIZE !== 0 ? "   " : " | ";
           }
-          output += row + '\n';
+          output += row + "\n";
           if (i % BLOCK_SIZE === 0) output += divider;
         }
         return output;
       } catch (e) {
-        return 'ERROR: ' + e.message;
+        return "ERROR: " + e.message;
       }
     }
   }

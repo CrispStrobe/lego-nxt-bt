@@ -1,17 +1,23 @@
 (function (Scratch) {
   "use strict";
 
-  // ============================================================================
-  // POLYFILLS AND UTILITIES
-  // ============================================================================
-
   const ArgumentType = Scratch.ArgumentType;
   const BlockType = Scratch.BlockType;
   const Cast = Scratch.Cast;
 
-  // Color utility functions
-  const colorUtils = {
-    hsvToRgb: function ({ h, s, v }) {
+  // Utility functions that would normally come from scratch-vm
+  const MathUtil = {
+    clamp: (val, min, max) => Math.max(min, Math.min(val, max)),
+    scale: (val, inMin, inMax, outMin, outMax) =>
+      ((val - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin,
+    wrapClamp: (val, min, max) => {
+      const range = max - min;
+      return ((((val - min) % range) + range) % range) + min;
+    },
+  };
+
+  const color = {
+    hsvToRgb: ({ h, s, v }) => {
       const c = v * s;
       const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
       const m = v - c;
@@ -49,39 +55,12 @@
         b: Math.round((b + m) * 255),
       };
     },
-
-    rgbToDecimal: function ({ r, g, b }) {
-      return (r << 16) | (g << 8) | b;
-    },
+    rgbToDecimal: ({ r, g, b }) => (r << 16) | (g << 8) | b,
   };
 
-  // Math utility functions
-  const MathUtil = {
-    clamp: function (val, min, max) {
-      return Math.max(min, Math.min(val, max));
-    },
-
-    scale: function (val, inMin, inMax, outMin, outMax) {
-      return ((val - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
-    },
-
-    wrapClamp: function (val, min, max) {
-      const range = max - min;
-      return ((((val - min) % range) + range) % range) + min;
-    },
-  };
-
-  // Base64 utility functions
   const Base64Util = {
-    uint8ArrayToBase64: function (array) {
-      let binary = "";
-      for (let i = 0; i < array.length; i++) {
-        binary += String.fromCharCode(array[i]);
-      }
-      return btoa(binary);
-    },
-
-    base64ToUint8Array: function (base64) {
+    uint8ArrayToBase64: (array) => btoa(String.fromCharCode.apply(null, array)),
+    base64ToUint8Array: (base64) => {
       const binary = atob(base64);
       const array = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
@@ -91,14 +70,12 @@
     },
   };
 
-  // Rate limiter
   class RateLimiter {
     constructor(maxRate) {
       this._maxRate = maxRate;
       this._lastSendTime = 0;
       this._sendInterval = 1000 / maxRate;
     }
-
     okayToSend() {
       const now = Date.now();
       if (now - this._lastSendTime >= this._sendInterval) {
@@ -109,10 +86,7 @@
     }
   }
 
-  // ============================================================================
-  // CONSTANTS AND CONFIGURATION
-  // ============================================================================
-
+  // Icon and constants
   const iconURI =
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFAAAABQCAMAAAC5zwKfAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAACpQTFRF////fIel5ufolZ62/2YavsPS+YZOkJmy9/j53+Hk6+zs6N/b6dfO////tDhMHAAAAA50Uk5T/////////////////wBFwNzIAAAA6ElEQVR42uzX2w6DIBAEUGDVtlr//3dLaLwgiwUd2z7MJPJg5EQWiGhGcAxBggQJEiT436CIfqXJPTn3MKNYYMSDFpoAmp24OaYgvwKnFgL2zvVTCwHrMoMi+nUQLFthaNCCa0iwclLkDgYVsQp0mzxuqXgK1MRzoCLWgkPXNN2wI/q6Kvt7u/cX0HtejN8x2sXpnpb8J8D3b0Keuhh3X975M+i0xNVbg3s1TIasgK21bQyGO+s2PykaGMYbge8KrNrssvkOWDXkErB8UuBHETjoYLkKBA8ZfuDkbwVBggQJEiR4MC8BBgDTtMZLx2nFCQAAAABJRU5ErkJggg==";
 
@@ -142,7 +116,6 @@
     MOTOREXT: 0x26,
     MOTORINT: 0x27,
     TILT: 0x28,
-    TECHNIC_FORCE_SENSOR: 0x3f,
   };
 
   const BoostPortFeedback = {
@@ -153,20 +126,8 @@
     BUSY_OR_FULL: 0x10,
   };
 
-  const BoostPort10000223OrOlder = {
-    A: 55,
-    B: 56,
-    C: 1,
-    D: 2,
-  };
-
-  const BoostPort10000224OrNewer = {
-    A: 0,
-    B: 1,
-    C: 2,
-    D: 3,
-  };
-
+  const BoostPort10000223OrOlder = { A: 55, B: 56, C: 1, D: 2 };
+  const BoostPort10000224OrNewer = { A: 0, B: 1, C: 2, D: 3 };
   let BoostPort = BoostPort10000224OrNewer;
 
   const BoostColor = {
@@ -189,6 +150,8 @@
     [BoostColor.WHITE]: 10,
     [BoostColor.BLACK]: 0,
   };
+
+  const BoostOperator = { LESS: "<", GREATER: ">", EQUAL: "=" };
 
   const BoostMessage = {
     HUB_PROPERTIES: 0x01,
@@ -235,29 +198,6 @@
     UPDATE: 0x06,
   };
 
-  const BoostHubAction = {
-    SWITCH_OFF_HUB: 0x01,
-    DISCONNECT: 0x02,
-    VCC_PORT_CONTROL_ON: 0x03,
-    VCC_PORT_CONTROL_OFF: 0x04,
-    ACTIVATE_BUSY_INDICATION: 0x05,
-    RESET_BUSY_INDICATION: 0x06,
-  };
-
-  const BoostAlert = {
-    LOW_VOLTAGE: 0x01,
-    HIGH_CURRENT: 0x02,
-    LOW_SIGNAL_STRENGTH: 0x03,
-    OVER_POWER_CONDITION: 0x04,
-  };
-
-  const BoostAlertOperation = {
-    ENABLE_UPDATES: 0x01,
-    DISABLE_UPDATES: 0x02,
-    REQUEST_UPDATES: 0x03,
-    UPDATE: 0x04,
-  };
-
   const BoostOutputSubCommand = {
     START_POWER: 0x01,
     START_POWER_PAIR: 0x02,
@@ -282,18 +222,12 @@
     COMMAND_FEEDBACK: 0x01,
   };
 
-  const BoostMotorEndState = {
-    FLOAT: 0,
-    HOLD: 126,
-    BRAKE: 127,
-  };
-
+  const BoostMotorEndState = { FLOAT: 0, HOLD: 126, BRAKE: 127 };
   const BoostMotorProfile = {
     DO_NOT_USE: 0x00,
     ACCELERATION: 0x01,
     DECELERATION: 0x02,
   };
-
   const BoostIOEvent = {
     ATTACHED: 0x01,
     DETACHED: 0x00,
@@ -304,12 +238,8 @@
     TILT: 0,
     LED: 1,
     COLOR: 0,
-    DISTANCE: 1,
-    REFLECTION: 3,
-    AMBIENT: 4,
+    COLOR_DISTANCE: 8,
     MOTOR_SENSOR: 2,
-    FORCE: 0,
-    TOUCHED: 1,
     UNKNOWN: 0,
   };
 
@@ -320,66 +250,38 @@
     ON_FOR_ROTATION: 3,
   };
 
-  // ============================================================================
-  // UTILITY FUNCTIONS
-  // ============================================================================
-
-  const numberToInt32Array = function (number) {
+  const numberToInt32Array = (number) => {
     const buffer = new ArrayBuffer(4);
     const dataview = new DataView(buffer);
-    dataview.setInt32(0, number, true);
+    dataview.setInt32(0, number);
     return [
-      dataview.getInt8(0),
-      dataview.getInt8(1),
-      dataview.getInt8(2),
       dataview.getInt8(3),
+      dataview.getInt8(2),
+      dataview.getInt8(1),
+      dataview.getInt8(0),
     ];
   };
 
-  const int32ArrayToNumber = function (array) {
+  const int32ArrayToNumber = (array) => {
     const i = Uint8Array.from(array);
     const d = new DataView(i.buffer);
     return d.getInt32(0, true);
   };
 
-  const decodeVersion = function (version) {
-    const buffer = new ArrayBuffer(4);
-    const view = new DataView(buffer);
-    view.setInt32(0, version, true);
-
-    const major = view.getUint8(3) >> 4;
-    const minor = view.getUint8(3) & 0x0f;
-    const bugfix = view.getUint8(2);
-    const build = view.getUint16(0, true);
-
-    return `${major}.${minor}.${bugfix.toString().padStart(2, "0")}.${build.toString().padStart(4, "0")}`;
-  };
-
-  // ============================================================================
-  // MOTOR CLASS
-  // ============================================================================
-
+  // Motor class
   class BoostMotor {
     constructor(parent, index) {
       this._parent = parent;
       this._index = index;
-
       this._direction = 1;
       this._power = 50;
       this._position = 0;
       this._status = BoostMotorState.OFF;
-
-      this._stopMode = BoostMotorEndState.BRAKE;
-      this._accelerationTime = 0;
-      this._decelerationTime = 0;
-      this._useProfile = BoostMotorProfile.DO_NOT_USE;
-
       this._pendingDurationTimeoutId = null;
       this._pendingDurationTimeoutStartTime = null;
       this._pendingDurationTimeoutDelay = null;
       this._pendingRotationDestination = null;
       this._pendingRotationPromise = null;
-
       this.turnOff = this.turnOff.bind(this);
     }
 
@@ -389,7 +291,6 @@
     set direction(value) {
       this._direction = value < 0 ? -1 : 1;
     }
-
     get power() {
       return this._power;
     }
@@ -400,14 +301,12 @@
         this._power = MathUtil.scale(value, 1, 100, 10, 100);
       }
     }
-
     get position() {
       return this._position;
     }
     set position(value) {
       this._position = value;
     }
-
     get status() {
       return this._status;
     }
@@ -416,14 +315,6 @@
       this._clearDurationTimeout();
       this._status = value;
     }
-
-    get stopMode() {
-      return this._stopMode;
-    }
-    set stopMode(value) {
-      this._stopMode = value;
-    }
-
     get pendingDurationTimeoutStartTime() {
       return this._pendingDurationTimeoutStartTime;
     }
@@ -440,42 +331,6 @@
       this._pendingRotationPromise = func;
     }
 
-    setAcceleration(time) {
-      this._accelerationTime = MathUtil.clamp(time, 0, 10000);
-      this._useProfile |= BoostMotorProfile.ACCELERATION;
-
-      const cmd = this._parent.generateOutputCommand(
-        this._index,
-        BoostOutputExecution.EXECUTE_IMMEDIATELY,
-        BoostOutputSubCommand.SET_ACC_TIME,
-        [...numberToInt32Array(this._accelerationTime).slice(0, 2), 0],
-      );
-      this._parent.send(BoostBLE.characteristic, cmd);
-    }
-
-    setDeceleration(time) {
-      this._decelerationTime = MathUtil.clamp(time, 0, 10000);
-      this._useProfile |= BoostMotorProfile.DECELERATION;
-
-      const cmd = this._parent.generateOutputCommand(
-        this._index,
-        BoostOutputExecution.EXECUTE_IMMEDIATELY,
-        BoostOutputSubCommand.SET_DEC_TIME,
-        [...numberToInt32Array(this._decelerationTime).slice(0, 2), 0],
-      );
-      this._parent.send(BoostBLE.characteristic, cmd);
-    }
-
-    resetPosition(newPosition = 0) {
-      const cmd = this._parent.generateOutputCommand(
-        this._index,
-        BoostOutputExecution.EXECUTE_IMMEDIATELY,
-        BoostOutputSubCommand.WRITE_DIRECT_MODE_DATA,
-        [BoostMode.MOTOR_SENSOR, ...numberToInt32Array(newPosition)],
-      );
-      return this._parent.send(BoostBLE.characteristic, cmd);
-    }
-
     _turnOn() {
       const cmd = this._parent.generateOutputCommand(
         this._index,
@@ -484,7 +339,7 @@
         [
           this.power * this.direction,
           MathUtil.clamp(this.power + BoostMotorMaxPowerAdd, 0, 100),
-          this._useProfile,
+          BoostMotorProfile.DO_NOT_USE,
         ],
       );
       this._parent.send(BoostBLE.characteristic, cmd);
@@ -504,44 +359,22 @@
 
     turnOnForDegrees(degrees, direction) {
       degrees = Math.max(0, degrees);
-
       const cmd = this._parent.generateOutputCommand(
         this._index,
-        BoostOutputExecution.EXECUTE_IMMEDIATELY |
+        BoostOutputExecution.EXECUTE_IMMEDIATELY ^
           BoostOutputExecution.COMMAND_FEEDBACK,
         BoostOutputSubCommand.START_SPEED_FOR_DEGREES,
         [
           ...numberToInt32Array(degrees),
           this.power * this.direction * direction,
           MathUtil.clamp(this.power + BoostMotorMaxPowerAdd, 0, 100),
-          this._stopMode,
-          this._useProfile,
+          BoostMotorEndState.BRAKE,
+          BoostMotorProfile.DO_NOT_USE,
         ],
       );
-
       this.status = BoostMotorState.ON_FOR_ROTATION;
       this._pendingRotationDestination =
         this.position + degrees * this.direction * direction;
-      this._parent.send(BoostBLE.characteristic, cmd);
-    }
-
-    turnToPosition(position) {
-      const cmd = this._parent.generateOutputCommand(
-        this._index,
-        BoostOutputExecution.EXECUTE_IMMEDIATELY |
-          BoostOutputExecution.COMMAND_FEEDBACK,
-        BoostOutputSubCommand.GO_TO_ABS_POSITION,
-        [
-          ...numberToInt32Array(position),
-          this.power,
-          MathUtil.clamp(this.power + BoostMotorMaxPowerAdd, 0, 100),
-          this._stopMode,
-          this._useProfile,
-        ],
-      );
-
-      this.status = BoostMotorState.ON_FOR_ROTATION;
-      this._pendingRotationDestination = position;
       this._parent.send(BoostBLE.characteristic, cmd);
     }
 
@@ -550,13 +383,8 @@
         this._index,
         BoostOutputExecution.EXECUTE_IMMEDIATELY,
         BoostOutputSubCommand.START_POWER,
-        [
-          this._stopMode === BoostMotorEndState.FLOAT
-            ? BoostMotorEndState.FLOAT
-            : 0,
-        ],
+        [BoostMotorEndState.FLOAT],
       );
-
       this.status = BoostMotorState.OFF;
       this._parent.send(BoostBLE.characteristic, cmd, useLimiter);
     }
@@ -595,47 +423,390 @@
   }
 
   // ============================================================================
-  // BOOST PERIPHERAL CLASS
+  // JSONRPC CLASS (from scratch-vm)
   // ============================================================================
-
-  class Boost {
+  class JSONRPC {
     constructor() {
-      this._rateLimiter = new RateLimiter(BoostBLE.sendRateMax);
-      this._pingDeviceId = null;
-      this._ble = null;
+      this._requestID = 0;
+      this._openRequests = {};
+    }
+
+    sendRemoteRequest(method, params) {
+      const requestID = this._requestID++;
+      const promise = new Promise((resolve, reject) => {
+        this._openRequests[requestID] = { resolve, reject };
+      });
+      this._sendRequest(method, params, requestID);
+      return promise;
+    }
+
+    sendRemoteNotification(method, params) {
+      this._sendRequest(method, params);
+    }
+
+    didReceiveCall(/* method, params */) {
+      throw new Error("Must override didReceiveCall");
+    }
+
+    _sendMessage(/* jsonMessageObject */) {
+      throw new Error("Must override _sendMessage");
+    }
+
+    _sendRequest(method, params, id) {
+      const request = {
+        jsonrpc: "2.0",
+        method,
+        params,
+      };
+      if (id !== null && typeof id !== "undefined") {
+        request.id = id;
+      }
+      this._sendMessage(request);
+    }
+
+    _handleMessage(json) {
+      if (json.jsonrpc !== "2.0") {
+        throw new Error(
+          `Bad or missing JSON-RPC version in message: ${JSON.stringify(json)}`,
+        );
+      }
+      if (Object.prototype.hasOwnProperty.call(json, "method")) {
+        this._handleRequest(json);
+      } else {
+        this._handleResponse(json);
+      }
+    }
+
+    _sendResponse(id, result, error) {
+      const response = {
+        jsonrpc: "2.0",
+        id,
+      };
+      if (error) {
+        response.error = error;
+      } else {
+        response.result = result || null;
+      }
+      this._sendMessage(response);
+    }
+
+    _handleResponse(json) {
+      const { result, error, id } = json;
+      const openRequest = this._openRequests[id];
+      delete this._openRequests[id];
+      if (openRequest) {
+        if (error) {
+          openRequest.reject(error);
+        } else {
+          openRequest.resolve(result);
+        }
+      }
+    }
+
+    _handleRequest(json) {
+      const { method, params, id } = json;
+      const rawResult = this.didReceiveCall(method, params);
+      if (id !== null && typeof id !== "undefined") {
+        Promise.resolve(rawResult).then(
+          (result) => {
+            this._sendResponse(id, result);
+          },
+          (error) => {
+            this._sendResponse(id, null, error);
+          },
+        );
+      }
+    }
+  }
+
+  // ============================================================================
+  // BLE CLASS (from scratch-vm/src/io/ble.js)
+  // ============================================================================
+  class BLE extends JSONRPC {
+    constructor(
+      runtime,
+      extensionId,
+      peripheralOptions,
+      connectCallback,
+      resetCallback = null,
+    ) {
+      super();
+
+      console.log("[BLE] Constructor called", {
+        runtime,
+        extensionId,
+        peripheralOptions,
+      });
+
+      this._socket = runtime.getScratchLinkSocket("BLE");
+      console.log("[BLE] Got socket:", this._socket);
+
+      this._socket.setOnOpen(this.requestPeripheral.bind(this));
+      this._socket.setOnClose(this.handleDisconnectError.bind(this));
+      this._socket.setOnError(this._handleRequestError.bind(this));
+      this._socket.setHandleMessage(this._handleMessage.bind(this));
+
+      this._sendMessage = this._socket.sendMessage.bind(this._socket);
+
+      this._availablePeripherals = {};
+      this._connectCallback = connectCallback;
+      this._connected = false;
+      this._characteristicDidChangeCallback = null;
+      this._resetCallback = resetCallback;
+      this._discoverTimeoutID = null;
+      this._extensionId = extensionId;
+      this._peripheralOptions = peripheralOptions;
+      this._runtime = runtime;
+
+      console.log("[BLE] Opening socket...");
+      this._socket.open();
+    }
+
+    requestPeripheral() {
+      console.log("[BLE] requestPeripheral called");
+      this._availablePeripherals = {};
+      if (this._discoverTimeoutID) {
+        window.clearTimeout(this._discoverTimeoutID);
+      }
+      this._discoverTimeoutID = window.setTimeout(
+        this._handleDiscoverTimeout.bind(this),
+        15000,
+      );
+
+      console.log(
+        "[BLE] Sending discover request with options:",
+        this._peripheralOptions,
+      );
+      this.sendRemoteRequest("discover", this._peripheralOptions).catch((e) => {
+        console.error("[BLE] Discover error:", e);
+        this._handleRequestError(e);
+      });
+    }
+
+    connectPeripheral(id) {
+      console.log("[BLE] connectPeripheral called with id:", id);
+      this.sendRemoteRequest("connect", { peripheralId: id })
+        .then(() => {
+          console.log("[BLE] Connected successfully");
+          this._connected = true;
+          this._runtime.emit(this._runtime.constructor.PERIPHERAL_CONNECTED);
+          this._connectCallback();
+        })
+        .catch((e) => {
+          console.error("[BLE] Connect error:", e);
+          this._handleRequestError(e);
+        });
+    }
+
+    disconnect() {
+      console.log("[BLE] disconnect called");
+      if (this._connected) {
+        this._connected = false;
+      }
+
+      if (this._socket.isOpen()) {
+        this._socket.close();
+      }
+
+      if (this._discoverTimeoutID) {
+        window.clearTimeout(this._discoverTimeoutID);
+      }
+
+      this._runtime.emit(this._runtime.constructor.PERIPHERAL_DISCONNECTED);
+    }
+
+    isConnected() {
+      return this._connected;
+    }
+
+    startNotifications(
+      serviceId,
+      characteristicId,
+      onCharacteristicChanged = null,
+    ) {
+      console.log("[BLE] startNotifications", { serviceId, characteristicId });
+      const params = {
+        serviceId,
+        characteristicId,
+      };
+      this._characteristicDidChangeCallback = onCharacteristicChanged;
+      return this.sendRemoteRequest("startNotifications", params).catch((e) => {
+        console.error("[BLE] startNotifications error:", e);
+        this.handleDisconnectError(e);
+      });
+    }
+
+    read(
+      serviceId,
+      characteristicId,
+      optStartNotifications = false,
+      onCharacteristicChanged = null,
+    ) {
+      console.log("[BLE] read", {
+        serviceId,
+        characteristicId,
+        optStartNotifications,
+      });
+      const params = {
+        serviceId,
+        characteristicId,
+      };
+      if (optStartNotifications) {
+        params.startNotifications = true;
+      }
+      if (onCharacteristicChanged) {
+        this._characteristicDidChangeCallback = onCharacteristicChanged;
+      }
+      return this.sendRemoteRequest("read", params).catch((e) => {
+        console.error("[BLE] read error:", e);
+        this.handleDisconnectError(e);
+      });
+    }
+
+    write(
+      serviceId,
+      characteristicId,
+      message,
+      encoding = null,
+      withResponse = null,
+    ) {
+      console.log("[BLE] write", {
+        serviceId,
+        characteristicId,
+        messageLength: message.length,
+        encoding,
+      });
+      const params = { serviceId, characteristicId, message };
+      if (encoding) {
+        params.encoding = encoding;
+      }
+      if (withResponse !== null) {
+        params.withResponse = withResponse;
+      }
+      return this.sendRemoteRequest("write", params).catch((e) => {
+        console.error("[BLE] write error:", e);
+        this.handleDisconnectError(e);
+      });
+    }
+
+    didReceiveCall(method, params) {
+      console.log("[BLE] didReceiveCall", { method, params });
+      switch (method) {
+        case "didDiscoverPeripheral":
+          this._availablePeripherals[params.peripheralId] = params;
+          this._runtime.emit(
+            this._runtime.constructor.PERIPHERAL_LIST_UPDATE,
+            this._availablePeripherals,
+          );
+          if (this._discoverTimeoutID) {
+            window.clearTimeout(this._discoverTimeoutID);
+          }
+          break;
+        case "userDidPickPeripheral":
+          this._availablePeripherals[params.peripheralId] = params;
+          this._runtime.emit(
+            this._runtime.constructor.USER_PICKED_PERIPHERAL,
+            this._availablePeripherals,
+          );
+          if (this._discoverTimeoutID) {
+            window.clearTimeout(this._discoverTimeoutID);
+          }
+          break;
+        case "userDidNotPickPeripheral":
+          this._runtime.emit(this._runtime.constructor.PERIPHERAL_SCAN_TIMEOUT);
+          if (this._discoverTimeoutID) {
+            window.clearTimeout(this._discoverTimeoutID);
+          }
+          break;
+        case "characteristicDidChange":
+          if (this._characteristicDidChangeCallback) {
+            this._characteristicDidChangeCallback(params.message);
+          }
+          break;
+        case "ping":
+          return 42;
+      }
+    }
+
+    handleDisconnectError(/* e */) {
+      console.error("[BLE] handleDisconnectError");
+      if (!this._connected) return;
+
+      this.disconnect();
+
+      if (this._resetCallback) {
+        this._resetCallback();
+      }
+
+      this._runtime.emit(
+        this._runtime.constructor.PERIPHERAL_CONNECTION_LOST_ERROR,
+        {
+          message: `Scratch lost connection to`,
+          extensionId: this._extensionId,
+        },
+      );
+    }
+
+    _handleRequestError(/* e */) {
+      console.error("[BLE] _handleRequestError");
+      this._runtime.emit(this._runtime.constructor.PERIPHERAL_REQUEST_ERROR, {
+        message: `Scratch lost connection to`,
+        extensionId: this._extensionId,
+      });
+    }
+
+    _handleDiscoverTimeout() {
+      console.warn("[BLE] Discover timeout");
+      if (this._discoverTimeoutID) {
+        window.clearTimeout(this._discoverTimeoutID);
+      }
+      this._runtime.emit(this._runtime.constructor.PERIPHERAL_SCAN_TIMEOUT);
+    }
+  }
+
+  // Boost peripheral class
+  class Boost {
+    constructor(runtime, extensionId) {
+      console.log("[BOOST] Initializing Boost extension", {
+        runtime,
+        extensionId,
+      });
+
+      this._runtime =
+        runtime || (typeof vm !== "undefined" ? vm.runtime : null);
+      console.log("[BOOST] Resolved runtime:", this._runtime);
+
+      this._extensionId = extensionId;
 
       this._ports = [];
       this._motors = [];
-      this._portModes = {};
-
       this._sensors = {
         tiltX: 0,
         tiltY: 0,
-        color: {},
-        distance: {},
-        reflection: {},
-        ambient: {},
-        force: {},
-        pressed: {},
+        color: BoostColor.NONE,
         previousColor: BoostColor.NONE,
+        distance: null,
       };
-
       this._colorSamples = [];
+      this._ble = null;
+      this._rateLimiter = new RateLimiter(BoostBLE.sendRateMax);
+      this._pingDeviceId = null;
 
-      this._hubStatus = {
-        batteryLevel: 100,
-        buttonPressed: false,
-        rssi: 0,
-        fwVersion: "0.0.0.0",
-        hwVersion: "0.0.0.0",
-        lowVoltage: false,
-        highCurrent: false,
-        overPower: false,
-      };
-
+      this.reset = this.reset.bind(this);
       this._onConnect = this._onConnect.bind(this);
       this._onMessage = this._onMessage.bind(this);
       this._pingDevice = this._pingDevice.bind(this);
+
+      if (this._runtime) {
+        // Only register if we have a runtime
+        console.log("[BOOST] Registering peripheral extension");
+        this._runtime.registerPeripheralExtension(extensionId, this);
+        this._runtime.on("PROJECT_STOP_ALL", this.stopAll.bind(this));
+      } else {
+        console.warn(
+          "[BOOST] No runtime available - peripheral features may not work",
+        );
+      }
     }
 
     get tiltX() {
@@ -645,40 +816,13 @@
       return this._sensors.tiltY;
     }
     get color() {
-      return (
-        this._sensors.color[BoostPort.C] ||
-        Object.values(this._sensors.color)[0] ||
-        BoostColor.NONE
-      );
+      return this._sensors.color;
     }
     get previousColor() {
       return this._sensors.previousColor;
     }
-    get hubStatus() {
-      return this._hubStatus;
-    }
-
-    getColor(port) {
-      return this._sensors.color[port] || BoostColor.NONE;
-    }
-    getDistance(port) {
-      return this._sensors.distance[port] || 0;
-    }
-    getReflection(port) {
-      return this._sensors.reflection[port] || 0;
-    }
-    getAmbient(port) {
-      return this._sensors.ambient[port] || 0;
-    }
-    getForce(port) {
-      return this._sensors.force[port] || 0;
-    }
-    isForcePressed(port) {
-      return this._sensors.pressed[port] || false;
-    }
-
-    motor(index) {
-      return this._motors[index];
+    get distance() {
+      return this._sensors.distance;
     }
 
     boostColorForIndex(index) {
@@ -688,19 +832,14 @@
       return colorForIndex || BoostColor.NONE;
     }
 
-    stopAllMotors() {
-      this._motors.forEach((motor) => {
-        if (motor) {
-          motor.turnOff(false);
-        }
-      });
+    motor(index) {
+      return this._motors[index];
     }
 
-    shutdown() {
-      if (!this.isConnected()) return;
-      const cmd = [0, BoostMessage.HUB_ACTIONS, BoostHubAction.SWITCH_OFF_HUB];
-      cmd.unshift(cmd.length + 1);
-      this.send(BoostBLE.characteristic, cmd, false);
+    stopAllMotors() {
+      this._motors.forEach((motor) => {
+        if (motor) motor.turnOff(false);
+      });
     }
 
     setLED(inputRGB) {
@@ -710,12 +849,9 @@
         inputRGB & 0x000000ff,
       ];
 
-      const ledPortIndex = this._ports.indexOf(BoostIO.LED);
-      if (ledPortIndex === -1) return Promise.resolve();
-
       const cmd = this.generateOutputCommand(
-        ledPortIndex,
-        BoostOutputExecution.EXECUTE_IMMEDIATELY |
+        this._ports.indexOf(BoostIO.LED),
+        BoostOutputExecution.EXECUTE_IMMEDIATELY ^
           BoostOutputExecution.COMMAND_FEEDBACK,
         BoostOutputSubCommand.WRITE_DIRECT_MODE_DATA,
         [BoostMode.LED, ...rgb],
@@ -725,11 +861,8 @@
     }
 
     setLEDMode() {
-      const ledPortIndex = this._ports.indexOf(BoostIO.LED);
-      if (ledPortIndex === -1) return Promise.resolve();
-
       const cmd = this.generateInputCommand(
-        ledPortIndex,
+        this._ports.indexOf(BoostIO.LED),
         BoostMode.LED,
         0,
         false,
@@ -737,63 +870,80 @@
       return this.send(BoostBLE.characteristic, cmd);
     }
 
-    connect() {
-      if (this._ble && this._ble.isConnected()) {
-        return;
+    stopAll() {
+      if (!this.isConnected()) return;
+      this.stopAllMotors();
+    }
+
+    scan() {
+      console.log("[BOOST] ============ SCAN CALLED ============");
+
+      if (this._ble) {
+        console.log("[BOOST] Disconnecting existing BLE");
+        this._ble.disconnect();
       }
 
-      const options = {
+      const bleConfig = {
         filters: [
           {
             services: [BoostBLE.service],
-            manufacturerData: [
-              {
-                companyIdentifier: 0x0397,
-                dataPrefix: new Uint8Array([0x00, 0x40]),
-                mask: new Uint8Array([0x00, 0xff]),
+            manufacturerData: {
+              0x0397: {
+                dataPrefix: [0x00, 0x40],
+                mask: [0x00, 0xff],
               },
-            ],
+            },
           },
         ],
+        optionalServices: [],
       };
 
-      navigator.bluetooth
-        .requestDevice(options)
-        .then((device) => {
-          this._ble = device;
-          return device.gatt.connect();
-        })
-        .then((server) => {
-          return server.getPrimaryService(BoostBLE.service);
-        })
-        .then((service) => {
-          return service.getCharacteristic(BoostBLE.characteristic);
-        })
-        .then((characteristic) => {
-          this._characteristic = characteristic;
-          return characteristic.startNotifications();
-        })
-        .then((characteristic) => {
-          characteristic.addEventListener(
-            "characteristicvaluechanged",
-            (event) => {
-              const value = event.target.value;
-              const array = new Uint8Array(value.buffer);
-              const base64 = Base64Util.uint8ArrayToBase64(array);
-              this._onMessage(base64);
-            },
-          );
-          this._onConnect();
-        })
-        .catch((error) => {
-          console.error("BLE connection failed:", error);
-          this.disconnect();
+      console.log("[BOOST] Creating BLE instance with config:", bleConfig);
+
+      try {
+        this._ble = new BLE(
+          this._runtime,
+          this._extensionId,
+          bleConfig,
+          this._onConnect,
+          this.reset,
+        );
+        console.log("[BOOST] ✅ BLE instance created successfully");
+      } catch (error) {
+        console.error("[BOOST] ❌ ERROR creating BLE:", error);
+        console.error("[BOOST] Error stack:", error.stack);
+      }
+    }
+
+    // Alternative scan method if BLE class is not directly accessible
+    scanAlternative() {
+      console.log(
+        "[BOOST] Using alternative scan via runtime peripheral system",
+      );
+
+      // In TurboWarp, the runtime should handle BLE connection
+      // We just need to trigger the peripheral search
+      if (this._runtime && this._runtime.emit) {
+        console.log("[BOOST] Emitting peripheralScanRequest");
+        this._runtime.emit("peripheralScanRequest", {
+          extensionId: this._extensionId,
         });
+      }
+    }
+
+    connect(id) {
+      console.log("[BOOST] connect() called with id:", id);
+      if (this._ble) {
+        console.log("[BOOST] Calling connectPeripheral");
+        this._ble.connectPeripheral(id);
+      } else {
+        console.error("[BOOST] No BLE instance available");
+      }
     }
 
     disconnect() {
-      if (this._ble && this._ble.gatt && this._ble.gatt.connected) {
-        this._ble.gatt.disconnect();
+      if (this._ble) {
+        this._ble.disconnect();
       }
       this.reset();
     }
@@ -801,49 +951,47 @@
     reset() {
       this._ports = [];
       this._motors = [];
-      this._portModes = {};
       this._sensors = {
         tiltX: 0,
         tiltY: 0,
-        color: {},
-        distance: {},
-        reflection: {},
-        ambient: {},
-        force: {},
-        pressed: {},
+        color: BoostColor.NONE,
         previousColor: BoostColor.NONE,
+        distance: null,
       };
-      this._colorSamples = [];
-      this._hubStatus = {
-        batteryLevel: 100,
-        buttonPressed: false,
-        rssi: 0,
-        fwVersion: "0.0.0.0",
-        hwVersion: "0.0.0.0",
-        lowVoltage: false,
-        highCurrent: false,
-        overPower: false,
-      };
-
       if (this._pingDeviceId) {
-        clearInterval(this._pingDeviceId);
+        window.clearInterval(this._pingDeviceId);
         this._pingDeviceId = null;
       }
     }
 
     isConnected() {
-      return this._ble && this._ble.gatt && this._ble.gatt.connected;
+      const connected = this._ble ? this._ble.isConnected() : false;
+      console.log("[BOOST] isConnected() called, result:", connected);
+      return connected;
     }
 
     send(uuid, message, useLimiter = true) {
-      if (!this.isConnected()) return Promise.resolve();
+      console.log("[BOOST] send() called", {
+        uuid,
+        message: Array.from(message),
+        useLimiter,
+        connected: this.isConnected(),
+      });
 
-      if (useLimiter && !this._rateLimiter.okayToSend()) {
+      if (!this.isConnected()) {
+        console.warn("[BOOST] Not connected, cannot send");
         return Promise.resolve();
       }
 
-      const value = new Uint8Array(message);
-      return this._characteristic.writeValue(value);
+      if (useLimiter && !this._rateLimiter.okayToSend()) {
+        console.warn("[BOOST] Rate limited");
+        return Promise.resolve();
+      }
+
+      const base64 = Base64Util.uint8ArrayToBase64(message);
+      console.log("[BOOST] Sending base64:", base64);
+
+      return this._ble.write(BoostBLE.service, uuid, base64, "base64");
     }
 
     generateOutputCommand(portID, execution, subCommand, payload) {
@@ -868,24 +1016,28 @@
         mode,
       ]
         .concat(numberToInt32Array(delta))
-        .concat([enableNotifications ? 1 : 0]);
+        .concat([enableNotifications]);
       command.unshift(command.length + 1);
       return command;
     }
 
-    async _setInputMode(port, mode) {
-      if (this._portModes[port] === mode) return Promise.resolve();
-
-      this._portModes[port] = mode;
-      const cmd = this.generateInputCommand(port, mode, 1, true);
-      await this.send(BoostBLE.characteristic, cmd);
-
-      return new Promise((resolve) => setTimeout(resolve, 50));
-    }
-
     _onConnect() {
-      this._pingDeviceId = setInterval(this._pingDevice, BoostPingInterval);
+      console.log("[BOOST] _onConnect() called - device connected!");
 
+      console.log("[BOOST] Starting notifications");
+      this._ble.startNotifications(
+        BoostBLE.service,
+        BoostBLE.characteristic,
+        this._onMessage,
+      );
+
+      console.log("[BOOST] Setting up ping interval");
+      this._pingDeviceId = window.setInterval(
+        this._pingDevice,
+        BoostPingInterval,
+      );
+
+      console.log("[BOOST] Requesting firmware version");
       setTimeout(() => {
         const command = [
           0x00,
@@ -894,126 +1046,48 @@
           BoostHubPropertyOperation.REQUEST_UPDATE,
         ];
         command.unshift(command.length + 1);
+        console.log("[BOOST] Sending FW version request:", command);
         this.send(BoostBLE.characteristic, command, false);
       }, 500);
-
-      const statusCommands = [
-        [
-          BoostMessage.HUB_PROPERTIES,
-          BoostHubProperty.HW_VERSION,
-          BoostHubPropertyOperation.REQUEST_UPDATE,
-        ],
-        [
-          BoostMessage.HUB_PROPERTIES,
-          BoostHubProperty.BATTERY_VOLTAGE,
-          BoostHubPropertyOperation.ENABLE_UPDATES,
-        ],
-        [
-          BoostMessage.HUB_PROPERTIES,
-          BoostHubProperty.BUTTON,
-          BoostHubPropertyOperation.ENABLE_UPDATES,
-        ],
-        [
-          BoostMessage.HUB_PROPERTIES,
-          BoostHubProperty.RSSI,
-          BoostHubPropertyOperation.ENABLE_UPDATES,
-        ],
-        [
-          BoostMessage.HUB_ALERTS,
-          BoostAlert.LOW_VOLTAGE,
-          BoostAlertOperation.ENABLE_UPDATES,
-        ],
-        [
-          BoostMessage.HUB_ALERTS,
-          BoostAlert.HIGH_CURRENT,
-          BoostAlertOperation.ENABLE_UPDATES,
-        ],
-        [
-          BoostMessage.HUB_ALERTS,
-          BoostAlert.OVER_POWER_CONDITION,
-          BoostAlertOperation.ENABLE_UPDATES,
-        ],
-      ];
-
-      statusCommands.forEach((cmdData) => {
-        const cmd = [0, ...cmdData];
-        cmd.unshift(cmd.length + 1);
-        this.send(BoostBLE.characteristic, cmd, false);
-      });
     }
 
     _onMessage(base64) {
       const data = Base64Util.base64ToUint8Array(base64);
+      console.log("[BOOST] Received message:", {
+        length: data.length,
+        type: data[2],
+        portID: data[3],
+        raw: Array.from(data),
+      });
+
       const messageType = data[2];
       const portID = data[3];
 
       switch (messageType) {
         case BoostMessage.HUB_PROPERTIES: {
           const property = data[3];
-          const operation = data[4];
-
-          if (operation !== BoostHubPropertyOperation.UPDATE) break;
-
           switch (property) {
             case BoostHubProperty.FW_VERSION: {
               const fwVersion10000224 = int32ArrayToNumber([
                 0x24, 0x02, 0x00, 0x10,
               ]);
-              const fwHub = int32ArrayToNumber(data.slice(5, 9));
+              const fwHub = int32ArrayToNumber(data.slice(5, data.length));
               if (fwHub < fwVersion10000224) {
                 BoostPort = BoostPort10000223OrOlder;
                 console.log(
-                  "Move Hub firmware older than version 1.0.00.0224 detected. Using old port mapping.",
+                  "Move Hub firmware older than version 1.0.00.0224 detected.",
                 );
               } else {
                 BoostPort = BoostPort10000224OrNewer;
               }
-              this._hubStatus.fwVersion = decodeVersion(fwHub);
               break;
             }
-            case BoostHubProperty.HW_VERSION: {
-              const hwVersion = int32ArrayToNumber(data.slice(5, 9));
-              this._hubStatus.hwVersion = decodeVersion(hwVersion);
-              break;
-            }
-            case BoostHubProperty.BATTERY_VOLTAGE:
-              this._hubStatus.batteryLevel = data[5];
-              break;
-            case BoostHubProperty.BUTTON:
-              this._hubStatus.buttonPressed = data[5] === 1;
-              break;
-            case BoostHubProperty.RSSI:
-              this._hubStatus.rssi = data[5];
-              break;
           }
           break;
         }
-
-        case BoostMessage.HUB_ALERTS: {
-          const alertType = data[3];
-          const operation = data[4];
-
-          if (operation !== BoostAlertOperation.UPDATE) break;
-
-          const status = data[5] === 0xff;
-          switch (alertType) {
-            case BoostAlert.LOW_VOLTAGE:
-              this._hubStatus.lowVoltage = status;
-              break;
-            case BoostAlert.HIGH_CURRENT:
-              this._hubStatus.highCurrent = status;
-              break;
-            case BoostAlert.OVER_POWER_CONDITION:
-              this._hubStatus.overPower = status;
-              break;
-          }
-          break;
-        }
-
         case BoostMessage.HUB_ATTACHED_IO: {
           const event = data[4];
           const typeId = data[5];
-
           switch (event) {
             case BoostIOEvent.ATTACHED:
               this._registerSensorOrMotor(portID, typeId);
@@ -1021,57 +1095,40 @@
             case BoostIOEvent.DETACHED:
               this._clearPort(portID);
               break;
-            case BoostIOEvent.ATTACHED_VIRTUAL:
-            default:
-              break;
           }
           break;
         }
-
         case BoostMessage.PORT_VALUE: {
           const type = this._ports[portID];
-          const mode = this._portModes[portID];
-
           switch (type) {
             case BoostIO.TILT:
               this._sensors.tiltX = data[4];
               this._sensors.tiltY = data[5];
               break;
-
-            case BoostIO.COLOR:
-              if (mode === BoostMode.COLOR) {
-                this._colorSamples.unshift(data[4]);
-                if (this._colorSamples.length > BoostColorSampleSize) {
-                  this._colorSamples.pop();
-                  if (this._colorSamples.every((v, i, arr) => v === arr[0])) {
-                    this._sensors.previousColor =
-                      this._sensors.color[portID] || BoostColor.NONE;
-                    this._sensors.color[portID] = this.boostColorForIndex(
-                      this._colorSamples[0],
-                    );
-                  } else {
-                    this._sensors.color[portID] = BoostColor.NONE;
-                  }
+            case BoostIO.COLOR: {
+              this._colorSamples.unshift(data[4]);
+              if (this._colorSamples.length > BoostColorSampleSize) {
+                this._colorSamples.pop();
+                if (this._colorSamples.every((v, i, arr) => v === arr[0])) {
+                  this._sensors.previousColor = this._sensors.color;
+                  this._sensors.color = this.boostColorForIndex(
+                    this._colorSamples[0],
+                  );
                 } else {
-                  this._sensors.color[portID] = BoostColor.NONE;
+                  this._sensors.color = BoostColor.NONE;
                 }
-              } else if (mode === BoostMode.DISTANCE) {
-                this._sensors.distance[portID] = data[4] * 10;
-              } else if (mode === BoostMode.REFLECTION) {
-                this._sensors.reflection[portID] = data[4];
-              } else if (mode === BoostMode.AMBIENT) {
-                this._sensors.ambient[portID] = data[4];
+              } else {
+                this._sensors.color = BoostColor.NONE;
               }
-              break;
-
-            case BoostIO.TECHNIC_FORCE_SENSOR:
-              if (mode === BoostMode.FORCE) {
-                this._sensors.force[portID] = data[4] / 10;
-              } else if (mode === BoostMode.TOUCHED) {
-                this._sensors.pressed[portID] = data[4] > 0;
+              const distance = data[5];
+              const partialDistance = data[7];
+              let totalDistance = distance;
+              if (partialDistance > 0) {
+                totalDistance = totalDistance + 1 / partialDistance;
               }
+              this._sensors.distance = totalDistance;
               break;
-
+            }
             case BoostIO.MOTOREXT:
             case BoostIO.MOTORINT:
               if (this.motor(portID)) {
@@ -1080,18 +1137,9 @@
                 );
               }
               break;
-
-            case BoostIO.CURRENT:
-            case BoostIO.VOLTAGE:
-            case BoostIO.LED:
-              break;
-
-            default:
-              console.warn(`Unknown sensor value! Type: ${type}`);
           }
           break;
         }
-
         case BoostMessage.PORT_FEEDBACK: {
           const feedback = data[4];
           const motor = this.motor(portID);
@@ -1099,7 +1147,7 @@
             const isBusy = feedback & BoostPortFeedback.IN_PROGRESS;
             const commandCompleted =
               feedback &
-              (BoostPortFeedback.COMPLETED | BoostPortFeedback.DISCARDED);
+              (BoostPortFeedback.COMPLETED ^ BoostPortFeedback.DISCARDED);
             if (!isBusy && commandCompleted) {
               if (motor.status === BoostMotorState.ON_FOR_ROTATION) {
                 motor.status = BoostMotorState.OFF;
@@ -1108,17 +1156,14 @@
           }
           break;
         }
-
         case BoostMessage.ERROR:
-          console.warn(`Error reported by hub: ${Array.from(data)}`);
+          console.warn("Error reported by hub:", data);
           break;
       }
     }
 
     _pingDevice() {
-      if (this.isConnected()) {
-        this._characteristic.readValue().catch(() => {});
-      }
+      this._ble.read(BoostBLE.service, BoostBLE.characteristic, false);
     }
 
     _registerSensorOrMotor(portID, type) {
@@ -1137,11 +1182,8 @@
           mode = BoostMode.MOTOR_SENSOR;
           break;
         case BoostIO.COLOR:
-          mode = BoostMode.COLOR;
+          mode = BoostMode.COLOR_DISTANCE;
           delta = 0;
-          break;
-        case BoostIO.TECHNIC_FORCE_SENSOR:
-          mode = BoostMode.FORCE;
           break;
         case BoostIO.LED:
           mode = BoostMode.LED;
@@ -1161,38 +1203,26 @@
 
     _clearPort(portID) {
       const type = this._ports[portID];
-
       if (type === BoostIO.TILT) {
         this._sensors.tiltX = this._sensors.tiltY = 0;
       }
       if (type === BoostIO.COLOR) {
-        delete this._sensors.color[portID];
-        delete this._sensors.distance[portID];
-        delete this._sensors.reflection[portID];
-        delete this._sensors.ambient[portID];
+        this._sensors.color = BoostColor.NONE;
+        this._sensors.distance = null;
       }
-      if (type === BoostIO.TECHNIC_FORCE_SENSOR) {
-        delete this._sensors.force[portID];
-        delete this._sensors.pressed[portID];
-      }
-
       this._ports[portID] = "none";
       this._motors[portID] = null;
-      delete this._portModes[portID];
     }
   }
 
-  // ============================================================================
-  // SCRATCH EXTENSION CLASS
-  // ============================================================================
-
+  // Extension class
   const BoostMotorLabel = {
     A: "A",
     B: "B",
     C: "C",
     D: "D",
     AB: "AB",
-    ALL: "ALL",
+    ALL: "ABCD",
   };
 
   const BoostMotorDirection = {
@@ -1210,27 +1240,35 @@
   };
 
   class BoostExtension {
-    constructor() {
-      this._peripheral = new Boost();
+    constructor(runtime) {
+      console.log(
+        "[BOOST Extension] Constructor called with runtime:",
+        runtime,
+      );
+      console.log("[BOOST Extension] typeof runtime:", typeof runtime);
+      console.log("[BOOST Extension] Scratch object:", typeof Scratch);
+
+      this.runtime = runtime;
+
+      // Try to get runtime from Scratch global if not provided
+      if (!this.runtime && typeof Scratch !== "undefined" && Scratch.vm) {
+        this.runtime = Scratch.vm.runtime;
+        console.log("[BOOST Extension] Got runtime from Scratch.vm.runtime");
+      }
+
+      console.log("[BOOST Extension] Final runtime:", this.runtime);
+      this._peripheral = new Boost(this.runtime, "boost");
+      console.log("[BOOST Extension] Peripheral created:", this._peripheral);
     }
 
     getInfo() {
+      console.log("[BOOST] getInfo() called");
       return {
-        id: "legoboost",
-        name: "LEGO Boost Enhanced",
+        id: "boost", // MUST match the extensionId passed to Boost constructor
+        name: "LEGO BOOST",
         blockIconURI: iconURI,
+        showStatusButton: true, // This is critical!
         blocks: [
-          {
-            opcode: "connect",
-            text: "connect to Boost",
-            blockType: BlockType.COMMAND,
-          },
-          {
-            opcode: "disconnect",
-            text: "disconnect Boost",
-            blockType: BlockType.COMMAND,
-          },
-          "---",
           {
             opcode: "motorOnFor",
             text: "turn motor [MOTOR_ID] for [DURATION] seconds",
@@ -1264,22 +1302,6 @@
             },
           },
           {
-            opcode: "motorRunToPosition",
-            text: "turn motor [MOTOR_ID] to position [POSITION]",
-            blockType: BlockType.COMMAND,
-            arguments: {
-              MOTOR_ID: {
-                type: ArgumentType.STRING,
-                menu: "MOTOR_ID_SINGLE",
-                defaultValue: BoostMotorLabel.A,
-              },
-              POSITION: {
-                type: ArgumentType.ANGLE,
-                defaultValue: 0,
-              },
-            },
-          },
-          {
             opcode: "motorOn",
             text: "turn motor [MOTOR_ID] on",
             blockType: BlockType.COMMAND,
@@ -1303,7 +1325,6 @@
               },
             },
           },
-          "---",
           {
             opcode: "setMotorPower",
             text: "set motor [MOTOR_ID] speed to [POWER] %",
@@ -1338,71 +1359,6 @@
             },
           },
           {
-            opcode: "setMotorStopAction",
-            text: "set motor [MOTOR_ID] stop action to [ACTION]",
-            blockType: BlockType.COMMAND,
-            arguments: {
-              MOTOR_ID: {
-                type: ArgumentType.STRING,
-                menu: "MOTOR_ID",
-                defaultValue: BoostMotorLabel.A,
-              },
-              ACTION: {
-                type: ArgumentType.STRING,
-                menu: "STOP_ACTION",
-                defaultValue: "brake",
-              },
-            },
-          },
-          {
-            opcode: "setMotorAcceleration",
-            text: "set motor [MOTOR_ID] acceleration to [TIME] ms",
-            blockType: BlockType.COMMAND,
-            arguments: {
-              MOTOR_ID: {
-                type: ArgumentType.STRING,
-                menu: "MOTOR_ID",
-                defaultValue: BoostMotorLabel.A,
-              },
-              TIME: {
-                type: ArgumentType.NUMBER,
-                defaultValue: 300,
-              },
-            },
-          },
-          {
-            opcode: "setMotorDeceleration",
-            text: "set motor [MOTOR_ID] deceleration to [TIME] ms",
-            blockType: BlockType.COMMAND,
-            arguments: {
-              MOTOR_ID: {
-                type: ArgumentType.STRING,
-                menu: "MOTOR_ID",
-                defaultValue: BoostMotorLabel.A,
-              },
-              TIME: {
-                type: ArgumentType.NUMBER,
-                defaultValue: 300,
-              },
-            },
-          },
-          {
-            opcode: "resetMotorPosition",
-            text: "reset motor [MOTOR_ID] position to [POSITION]",
-            blockType: BlockType.COMMAND,
-            arguments: {
-              MOTOR_ID: {
-                type: ArgumentType.STRING,
-                menu: "MOTOR_ID",
-                defaultValue: BoostMotorLabel.A,
-              },
-              POSITION: {
-                type: ArgumentType.NUMBER,
-                defaultValue: 0,
-              },
-            },
-          },
-          {
             opcode: "getMotorPosition",
             text: "motor [MOTOR_REPORTER_ID] position",
             blockType: BlockType.REPORTER,
@@ -1414,17 +1370,11 @@
               },
             },
           },
-          "---",
           {
             opcode: "whenColor",
-            text: "when [PORT] sees [COLOR] brick",
+            text: "when [COLOR] brick seen",
             blockType: BlockType.HAT,
             arguments: {
-              PORT: {
-                type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
-              },
               COLOR: {
                 type: ArgumentType.STRING,
                 menu: "COLOR",
@@ -1434,14 +1384,9 @@
           },
           {
             opcode: "seeingColor",
-            text: "[PORT] seeing [COLOR] brick?",
+            text: "seeing [COLOR] brick?",
             blockType: BlockType.BOOLEAN,
             arguments: {
-              PORT: {
-                type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
-              },
               COLOR: {
                 type: ArgumentType.STRING,
                 menu: "COLOR",
@@ -1450,83 +1395,30 @@
             },
           },
           {
-            opcode: "getDistance",
-            text: "[PORT] distance (mm)",
-            blockType: BlockType.REPORTER,
-            arguments: {
-              PORT: {
-                type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
-              },
-            },
-          },
-          {
-            opcode: "getReflection",
-            text: "[PORT] reflection (%)",
-            blockType: BlockType.REPORTER,
-            arguments: {
-              PORT: {
-                type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
-              },
-            },
-          },
-          "---",
-          {
-            opcode: "getForce",
-            text: "[PORT] force (N)",
-            blockType: BlockType.REPORTER,
-            arguments: {
-              PORT: {
-                type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
-              },
-            },
-          },
-          {
-            opcode: "isForceSensorPressed",
-            text: "[PORT] force sensor pressed?",
-            blockType: BlockType.BOOLEAN,
-            arguments: {
-              PORT: {
-                type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
-              },
-            },
-          },
-          {
-            opcode: "whenForceSensorPressed",
-            text: "when [PORT] force sensor pressed",
+            opcode: "whenDistance",
+            text: "when distance [OPERATOR] [THRESHOLD]",
             blockType: BlockType.HAT,
             arguments: {
-              PORT: {
+              OPERATOR: {
                 type: ArgumentType.STRING,
-                menu: "SENSOR_PORTS",
-                defaultValue: "C",
+                menu: "OPERATOR",
+                defaultValue: BoostOperator.LESS,
+              },
+              THRESHOLD: {
+                type: ArgumentType.NUMBER,
+                defaultValue: 5,
               },
             },
           },
-          "---",
+          {
+            opcode: "getDistance",
+            text: "distance",
+            blockType: BlockType.REPORTER,
+          },
           {
             opcode: "whenTilted",
             text: "when tilted [TILT_DIRECTION_ANY]",
             blockType: BlockType.HAT,
-            arguments: {
-              TILT_DIRECTION_ANY: {
-                type: ArgumentType.STRING,
-                menu: "TILT_DIRECTION_ANY",
-                defaultValue: BoostTiltDirection.ANY,
-              },
-            },
-          },
-          {
-            opcode: "isTilted",
-            text: "tilted [TILT_DIRECTION_ANY]?",
-            blockType: BlockType.BOOLEAN,
             arguments: {
               TILT_DIRECTION_ANY: {
                 type: ArgumentType.STRING,
@@ -1547,7 +1439,6 @@
               },
             },
           },
-          "---",
           {
             opcode: "setLightHue",
             text: "set light color to [HUE]",
@@ -1560,67 +1451,30 @@
             },
           },
           {
-            opcode: "shutdown",
-            text: "shutdown hub",
+            opcode: "setLightBrightness",
+            text: "set light on port [PORT_ID] brightness to [BRIGHTNESS] %",
             blockType: BlockType.COMMAND,
-          },
-          {
-            opcode: "whenButtonPressed",
-            text: "when hub button pressed",
-            blockType: BlockType.HAT,
-          },
-          {
-            opcode: "isButtonPressed",
-            text: "hub button pressed?",
-            blockType: BlockType.BOOLEAN,
-          },
-          {
-            opcode: "getBatteryLevel",
-            text: "battery level (%)",
-            blockType: BlockType.REPORTER,
-          },
-          {
-            opcode: "getFirmwareVersion",
-            text: "firmware version",
-            blockType: BlockType.REPORTER,
-          },
-          {
-            opcode: "getRSSI",
-            text: "Bluetooth signal strength",
-            blockType: BlockType.REPORTER,
-          },
-          "---",
-          {
-            opcode: "whenBatteryLow",
-            text: "when battery is low",
-            blockType: BlockType.HAT,
-          },
-          {
-            opcode: "whenMotorOverloaded",
-            text: "when motor overloaded",
-            blockType: BlockType.HAT,
+            arguments: {
+              PORT_ID: {
+                type: ArgumentType.STRING,
+                menu: "MOTOR_REPORTER_ID",
+                defaultValue: BoostMotorLabel.C,
+              },
+              BRIGHTNESS: {
+                type: ArgumentType.NUMBER,
+                defaultValue: 100,
+              },
+            },
           },
         ],
         menus: {
           MOTOR_ID: {
             acceptReporters: true,
-            items: ["A", "B", "C", "D", "AB", "ALL"],
-          },
-          MOTOR_ID_SINGLE: {
-            acceptReporters: true,
-            items: ["A", "B", "C", "D"],
+            items: ["A", "B", "C", "D", "AB", "ABCD"],
           },
           MOTOR_REPORTER_ID: {
             acceptReporters: true,
             items: ["A", "B", "C", "D"],
-          },
-          SENSOR_PORTS: {
-            acceptReporters: true,
-            items: ["A", "B", "C", "D"],
-          },
-          STOP_ACTION: {
-            acceptReporters: true,
-            items: ["float", "brake", "hold"],
           },
           MOTOR_DIRECTION: {
             acceptReporters: true,
@@ -1646,67 +1500,17 @@
               "any color",
             ],
           },
+          OPERATOR: {
+            acceptReporters: true,
+            items: ["<", ">", "="],
+          },
         },
       };
-    }
-
-    connect() {
-      this._peripheral.connect();
-    }
-
-    disconnect() {
-      this._peripheral.disconnect();
-    }
-
-    _getPortFromLabel(label) {
-      switch (label) {
-        case "A":
-          return BoostPort.A;
-        case "B":
-          return BoostPort.B;
-        case "C":
-          return BoostPort.C;
-        case "D":
-          return BoostPort.D;
-        default:
-          return null;
-      }
-    }
-
-    _forEachMotor(motorID, callback) {
-      let motors;
-      switch (motorID) {
-        case BoostMotorLabel.A:
-          motors = [BoostPort.A];
-          break;
-        case BoostMotorLabel.B:
-          motors = [BoostPort.B];
-          break;
-        case BoostMotorLabel.C:
-          motors = [BoostPort.C];
-          break;
-        case BoostMotorLabel.D:
-          motors = [BoostPort.D];
-          break;
-        case BoostMotorLabel.AB:
-          motors = [BoostPort.A, BoostPort.B];
-          break;
-        case BoostMotorLabel.ALL:
-          motors = [BoostPort.A, BoostPort.B, BoostPort.C, BoostPort.D];
-          break;
-        default:
-          motors = [];
-          break;
-      }
-      for (const index of motors) {
-        callback(index);
-      }
     }
 
     motorOnFor(args) {
       let durationMS = Cast.toNumber(args.DURATION) * 1000;
       durationMS = MathUtil.clamp(durationMS, 0, 15000);
-
       return new Promise((resolve) => {
         this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
           const motor = this._peripheral.motor(motorIndex);
@@ -1741,33 +1545,13 @@
       return Promise.all(promises).then(() => {});
     }
 
-    motorRunToPosition(args) {
-      const position = Cast.toNumber(args.POSITION);
-      const promises = [];
-
-      this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
-        const motor = this._peripheral.motor(motorIndex);
-        if (motor) {
-          promises.push(
-            new Promise((resolve) => {
-              motor.turnToPosition(position);
-              motor.pendingRotationPromise = resolve;
-            }),
-          );
-        }
-      });
-
-      return Promise.all(promises).then(() => {});
-    }
-
     motorOn(args) {
       this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
         const motor = this._peripheral.motor(motorIndex);
         if (motor) motor.turnOnForever();
       });
-
       return new Promise((resolve) => {
-        setTimeout(() => resolve(), BoostBLE.sendInterval);
+        setTimeout(resolve, BoostBLE.sendInterval);
       });
     }
 
@@ -1776,9 +1560,8 @@
         const motor = this._peripheral.motor(motorIndex);
         if (motor) motor.turnOff();
       });
-
       return new Promise((resolve) => {
-        setTimeout(() => resolve(), BoostBLE.sendInterval);
+        setTimeout(resolve, BoostBLE.sendInterval);
       });
     }
 
@@ -1801,9 +1584,8 @@
           }
         }
       });
-
       return new Promise((resolve) => {
-        setTimeout(() => resolve(), BoostBLE.sendInterval);
+        setTimeout(resolve, BoostBLE.sendInterval);
       });
     }
 
@@ -1822,7 +1604,6 @@
               motor.direction = -motor.direction;
               break;
           }
-
           switch (motor.status) {
             case BoostMotorState.ON_FOREVER:
               motor.turnOnForever();
@@ -1837,55 +1618,8 @@
           }
         }
       });
-
       return new Promise((resolve) => {
-        setTimeout(() => resolve(), BoostBLE.sendInterval);
-      });
-    }
-
-    setMotorStopAction(args) {
-      const stopModeMap = {
-        float: BoostMotorEndState.FLOAT,
-        brake: BoostMotorEndState.BRAKE,
-        hold: BoostMotorEndState.HOLD,
-      };
-      const action = stopModeMap[args.ACTION] || BoostMotorEndState.BRAKE;
-
-      this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
-        const motor = this._peripheral.motor(motorIndex);
-        if (motor) {
-          motor.stopMode = action;
-        }
-      });
-    }
-
-    setMotorAcceleration(args) {
-      const time = Cast.toNumber(args.TIME);
-      this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
-        const motor = this._peripheral.motor(motorIndex);
-        if (motor) {
-          motor.setAcceleration(time);
-        }
-      });
-    }
-
-    setMotorDeceleration(args) {
-      const time = Cast.toNumber(args.TIME);
-      this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
-        const motor = this._peripheral.motor(motorIndex);
-        if (motor) {
-          motor.setDeceleration(time);
-        }
-      });
-    }
-
-    resetMotorPosition(args) {
-      const position = Cast.toNumber(args.POSITION);
-      this._forEachMotor(args.MOTOR_ID, (motorIndex) => {
-        const motor = this._peripheral.motor(motorIndex);
-        if (motor) {
-          motor.resetPosition(position);
-        }
+        setTimeout(resolve, BoostBLE.sendInterval);
       });
     }
 
@@ -1907,7 +1641,6 @@
         default:
           return 0;
       }
-
       if (portID !== null && this._peripheral.motor(portID)) {
         let val = this._peripheral.motor(portID).position;
         if (portID === BoostPort.A) {
@@ -1918,67 +1651,34 @@
       return 0;
     }
 
-    async _checkColor(args) {
-      const port = this._getPortFromLabel(args.PORT);
-      if (port === null) return false;
-
-      await this._peripheral._setInputMode(port, BoostMode.COLOR);
-
-      const currentColor = this._peripheral.getColor(port);
-      if (args.COLOR === BoostColor.ANY || args.COLOR === "any color") {
-        return currentColor !== BoostColor.NONE;
+    _forEachMotor(motorID, callback) {
+      let motors;
+      switch (motorID) {
+        case BoostMotorLabel.A:
+          motors = [BoostPort.A];
+          break;
+        case BoostMotorLabel.B:
+          motors = [BoostPort.B];
+          break;
+        case BoostMotorLabel.C:
+          motors = [BoostPort.C];
+          break;
+        case BoostMotorLabel.D:
+          motors = [BoostPort.D];
+          break;
+        case BoostMotorLabel.AB:
+          motors = [BoostPort.A, BoostPort.B];
+          break;
+        case BoostMotorLabel.ALL:
+          motors = [BoostPort.A, BoostPort.B, BoostPort.C, BoostPort.D];
+          break;
+        default:
+          motors = [];
+          break;
       }
-      return currentColor === args.COLOR;
-    }
-
-    whenColor(args) {
-      if (args.COLOR === BoostColor.ANY || args.COLOR === "any color") {
-        return (
-          this._peripheral.color !== BoostColor.NONE &&
-          this._peripheral.color !== this._peripheral.previousColor
-        );
+      for (const index of motors) {
+        callback(index);
       }
-      return args.COLOR === this._peripheral.color || this._checkColor(args);
-    }
-
-    seeingColor(args) {
-      return this._checkColor(args);
-    }
-
-    async getDistance(args) {
-      const port = this._getPortFromLabel(args.PORT);
-      if (port === null) return 0;
-
-      await this._peripheral._setInputMode(port, BoostMode.DISTANCE);
-      return this._peripheral.getDistance(port);
-    }
-
-    async getReflection(args) {
-      const port = this._getPortFromLabel(args.PORT);
-      if (port === null) return 0;
-
-      await this._peripheral._setInputMode(port, BoostMode.REFLECTION);
-      return this._peripheral.getReflection(port);
-    }
-
-    async getForce(args) {
-      const port = this._getPortFromLabel(args.PORT);
-      if (port === null) return 0;
-
-      await this._peripheral._setInputMode(port, BoostMode.FORCE);
-      return this._peripheral.getForce(port);
-    }
-
-    async isForceSensorPressed(args) {
-      const port = this._getPortFromLabel(args.PORT);
-      if (port === null) return false;
-
-      await this._peripheral._setInputMode(port, BoostMode.TOUCHED);
-      return this._peripheral.isForcePressed(port);
-    }
-
-    whenForceSensorPressed(args) {
-      return this.isForceSensorPressed(args);
     }
 
     whenTilted(args) {
@@ -2029,54 +1729,90 @@
       }
     }
 
+    whenColor(args) {
+      if (args.COLOR === BoostColor.ANY || args.COLOR === "any color") {
+        return (
+          this._peripheral.color !== BoostColor.NONE &&
+          this._peripheral.color !== this._peripheral.previousColor
+        );
+      }
+      return args.COLOR === this._peripheral.color;
+    }
+
+    seeingColor(args) {
+      if (args.COLOR === BoostColor.ANY || args.COLOR === "any color") {
+        return this._peripheral.color !== BoostColor.NONE;
+      }
+      return args.COLOR === this._peripheral.color;
+    }
+
+    whenDistance(args) {
+      const threshold = Cast.toNumber(args.THRESHOLD);
+      if (this._peripheral.distance === null) {
+        return false;
+      } else if (args.OPERATOR === BoostOperator.LESS) {
+        return this._peripheral.distance < threshold;
+      } else if (args.OPERATOR === BoostOperator.GREATER) {
+        return this._peripheral.distance > threshold;
+      } else if (args.OPERATOR === BoostOperator.EQUAL) {
+        return this._peripheral.distance === threshold;
+      }
+      return false;
+    }
+
+    getDistance() {
+      return this._peripheral.distance;
+    }
+
     setLightHue(args) {
       let inputHue = Cast.toNumber(args.HUE);
       inputHue = MathUtil.wrapClamp(inputHue, 0, 100);
       const hue = (inputHue * 360) / 100;
-
-      const rgbObject = colorUtils.hsvToRgb({ h: hue, s: 1, v: 1 });
-      const rgbDecimal = colorUtils.rgbToDecimal(rgbObject);
-
+      const rgbObject = color.hsvToRgb({ h: hue, s: 1, v: 1 });
+      const rgbDecimal = color.rgbToDecimal(rgbObject);
+      this._peripheral._led = inputHue;
       this._peripheral.setLED(rgbDecimal);
-
       return new Promise((resolve) => {
-        setTimeout(() => resolve(), BoostBLE.sendInterval);
+        setTimeout(resolve, BoostBLE.sendInterval);
       });
     }
 
-    shutdown() {
-      this._peripheral.shutdown();
+    _getStatus() {
+      console.log("[BOOST Extension] _getStatus() called");
+      if (!this._peripheral) {
+        console.log("[BOOST Extension] No peripheral");
+        return { status: 1, msg: "No peripheral" };
+      }
+
+      const connected = this._peripheral.isConnected();
+      console.log("[BOOST Extension] Connected:", connected);
+
+      return {
+        status: connected ? 2 : 1,
+        msg: connected ? "Connected" : "Disconnected",
+      };
     }
 
-    whenButtonPressed() {
-      return this._peripheral.hubStatus.buttonPressed;
-    }
-
-    isButtonPressed() {
-      return this._peripheral.hubStatus.buttonPressed;
-    }
-
-    getBatteryLevel() {
-      return this._peripheral.hubStatus.batteryLevel;
-    }
-
-    getFirmwareVersion() {
-      return this._peripheral.hubStatus.fwVersion;
-    }
-
-    getRSSI() {
-      return this._peripheral.hubStatus.rssi;
-    }
-
-    whenBatteryLow() {
-      return this._peripheral.hubStatus.lowVoltage;
-    }
-
-    whenMotorOverloaded() {
-      return (
-        this._peripheral.hubStatus.highCurrent ||
-        this._peripheral.hubStatus.overPower
+    setLightBrightness(args) {
+      const portName = Cast.toString(args.PORT_ID);
+      const portID = BoostPort[portName];
+      if (
+        typeof portID === "undefined" ||
+        this._peripheral._ports[portID] !== BoostIO.LIGHT
+      ) {
+        return;
+      }
+      const brightness = MathUtil.clamp(Cast.toNumber(args.BRIGHTNESS), 0, 100);
+      const cmd = this._peripheral.generateOutputCommand(
+        portID,
+        BoostOutputExecution.EXECUTE_IMMEDIATELY,
+        BoostOutputSubCommand.WRITE_DIRECT_MODE_DATA,
+        [0, brightness],
       );
+      this._peripheral.send(BoostBLE.characteristic, cmd);
+      return new Promise((resolve) => {
+        setTimeout(resolve, BoostBLE.sendInterval);
+      });
     }
   }
 

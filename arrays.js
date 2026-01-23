@@ -1,5 +1,5 @@
-(function(Scratch) {
-  'use strict';
+(function (Scratch) {
+  "use strict";
 
   // Storage for arrays (keyed by name)
   const arrays = {};
@@ -8,367 +8,505 @@
   class ArrayExtension {
     getInfo() {
       return {
-        id: 'arrays',
-        name: 'Arrays & Tensors',
-        color1: '#FF6680',
-        color2: '#FF4D6A',
-        color3: '#FF3355',
+        id: "arrays",
+        name: "Arrays & Tensors",
+        color1: "#FF6680",
+        color2: "#FF4D6A",
+        color3: "#FF3355",
         blocks: [
           {
-            opcode: 'create1D',
+            opcode: "create1D",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'create 1D array [NAME] from JSON [JSON]',
+            text: "create 1D array [NAME] from JSON [JSON]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              JSON: { type: Scratch.ArgumentType.STRING, defaultValue: '[1,2,3,4,5]' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              JSON: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "[1,2,3,4,5]",
+              },
+            },
           },
           {
-            opcode: 'create2D',
+            opcode: "create2D",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'create 2D array [NAME] from JSON [JSON]',
+            text: "create 2D array [NAME] from JSON [JSON]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' },
-              JSON: { type: Scratch.ArgumentType.STRING, defaultValue: '[[1,2],[3,4]]' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+              JSON: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "[[1,2],[3,4]]",
+              },
+            },
           },
           {
-            opcode: 'createEmpty',
+            opcode: "createEmpty",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'create empty array [NAME]',
+            text: "create empty array [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'createZeros',
+            opcode: "createZeros",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'create array [NAME] of zeros with shape [SHAPE]',
+            text: "create array [NAME] of zeros with shape [SHAPE]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'zeros' },
-              SHAPE: { type: Scratch.ArgumentType.STRING, defaultValue: '[3,3]' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "zeros",
+              },
+              SHAPE: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "[3,3]",
+              },
+            },
           },
           {
-            opcode: 'createRange',
+            opcode: "createRange",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'create array [NAME] from [START] to [END]',
+            text: "create array [NAME] from [START] to [END]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'range' },
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "range",
+              },
               START: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
-              END: { type: Scratch.ArgumentType.NUMBER, defaultValue: 10 }
-            }
+              END: { type: Scratch.ArgumentType.NUMBER, defaultValue: 10 },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'get',
+            opcode: "get",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'get [NAME] at [INDEX]',
+            text: "get [NAME] at [INDEX]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              INDEX: { type: Scratch.ArgumentType.STRING, defaultValue: '0' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              INDEX: { type: Scratch.ArgumentType.STRING, defaultValue: "0" },
+            },
           },
           {
-            opcode: 'get2D',
+            opcode: "get2D",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'get [NAME] at row [ROW] col [COL]',
+            text: "get [NAME] at row [ROW] col [COL]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' },
-              ROW: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
-              COL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 }
-            }
-          },
-          {
-            opcode: 'getMulti',
-            blockType: Scratch.BlockType.REPORTER,
-            text: 'get [NAME] at indices [INDICES]',
-            arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'tensor' },
-              INDICES: { type: Scratch.ArgumentType.STRING, defaultValue: '[0,1,2]' }
-            }
-          },
-          '---',
-          {
-            opcode: 'set',
-            blockType: Scratch.BlockType.COMMAND,
-            text: 'set [NAME] at [INDEX] to [VALUE]',
-            arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              INDEX: { type: Scratch.ArgumentType.STRING, defaultValue: '0' },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '42' }
-            }
-          },
-          {
-            opcode: 'set2D',
-            blockType: Scratch.BlockType.COMMAND,
-            text: 'set [NAME] at row [ROW] col [COL] to [VALUE]',
-            arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' },
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
               ROW: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
               COL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '42' }
-            }
+            },
           },
           {
-            opcode: 'setMulti',
-            blockType: Scratch.BlockType.COMMAND,
-            text: 'set [NAME] at indices [INDICES] to [VALUE]',
-            arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'tensor' },
-              INDICES: { type: Scratch.ArgumentType.STRING, defaultValue: '[0,1,2]' },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '42' }
-            }
-          },
-          '---',
-          {
-            opcode: 'push',
-            blockType: Scratch.BlockType.COMMAND,
-            text: 'push [VALUE] to [NAME]',
-            arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '42' }
-            }
-          },
-          {
-            opcode: 'pop',
+            opcode: "getMulti",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'pop from [NAME]',
+            text: "get [NAME] at indices [INDICES]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "tensor",
+              },
+              INDICES: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "[0,1,2]",
+              },
+            },
+          },
+          "---",
+          {
+            opcode: "set",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "set [NAME] at [INDEX] to [VALUE]",
+            arguments: {
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              INDEX: { type: Scratch.ArgumentType.STRING, defaultValue: "0" },
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "42" },
+            },
           },
           {
-            opcode: 'insert',
+            opcode: "set2D",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'insert [VALUE] at [INDEX] in [NAME]',
+            text: "set [NAME] at row [ROW] col [COL] to [VALUE]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+              ROW: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
+              COL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "42" },
+            },
+          },
+          {
+            opcode: "setMulti",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "set [NAME] at indices [INDICES] to [VALUE]",
+            arguments: {
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "tensor",
+              },
+              INDICES: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "[0,1,2]",
+              },
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "42" },
+            },
+          },
+          "---",
+          {
+            opcode: "push",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "push [VALUE] to [NAME]",
+            arguments: {
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "42" },
+            },
+          },
+          {
+            opcode: "pop",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "pop from [NAME]",
+            arguments: {
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
+          },
+          {
+            opcode: "insert",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "insert [VALUE] at [INDEX] in [NAME]",
+            arguments: {
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
               INDEX: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '42' }
-            }
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "42" },
+            },
           },
           {
-            opcode: 'remove',
+            opcode: "remove",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'remove at [INDEX] from [NAME]',
+            text: "remove at [INDEX] from [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              INDEX: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              INDEX: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'length',
+            opcode: "length",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'length of [NAME]',
+            text: "length of [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'shape',
+            opcode: "shape",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'shape of [NAME]',
+            text: "shape of [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+            },
           },
           {
-            opcode: 'contains',
+            opcode: "contains",
             blockType: Scratch.BlockType.BOOLEAN,
-            text: '[NAME] contains [VALUE]',
+            text: "[NAME] contains [VALUE]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '5' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "5" },
+            },
           },
           {
-            opcode: 'indexOf',
+            opcode: "indexOf",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'index of [VALUE] in [NAME]',
+            text: "index of [VALUE] in [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: '5' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              VALUE: { type: Scratch.ArgumentType.STRING, defaultValue: "5" },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'slice',
+            opcode: "slice",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'slice [NAME] from [START] to [END]',
+            text: "slice [NAME] from [START] to [END]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
               START: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
-              END: { type: Scratch.ArgumentType.NUMBER, defaultValue: 3 }
-            }
+              END: { type: Scratch.ArgumentType.NUMBER, defaultValue: 3 },
+            },
           },
           {
-            opcode: 'getRow',
+            opcode: "getRow",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'get row [ROW] from [NAME]',
+            text: "get row [ROW] from [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' },
-              ROW: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+              ROW: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
+            },
           },
           {
-            opcode: 'getColumn',
+            opcode: "getColumn",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'get column [COL] from [NAME]',
+            text: "get column [COL] from [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' },
-              COL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+              COL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'map',
+            opcode: "map",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'map [NAME] with function [FUNC]',
+            text: "map [NAME] with function [FUNC]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              FUNC: { type: Scratch.ArgumentType.STRING, defaultValue: 'x => x * 2' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              FUNC: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "x => x * 2",
+              },
+            },
           },
           {
-            opcode: 'filter',
+            opcode: "filter",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'filter [NAME] with function [FUNC]',
+            text: "filter [NAME] with function [FUNC]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              FUNC: { type: Scratch.ArgumentType.STRING, defaultValue: 'x => x > 5' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              FUNC: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "x => x > 5",
+              },
+            },
           },
           {
-            opcode: 'reduce',
+            opcode: "reduce",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'reduce [NAME] with function [FUNC] initial [INIT]',
+            text: "reduce [NAME] with function [FUNC] initial [INIT]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              FUNC: { type: Scratch.ArgumentType.STRING, defaultValue: '(acc,x) => acc+x' },
-              INIT: { type: Scratch.ArgumentType.STRING, defaultValue: '0' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              FUNC: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "(acc,x) => acc+x",
+              },
+              INIT: { type: Scratch.ArgumentType.STRING, defaultValue: "0" },
+            },
           },
           {
-            opcode: 'sort',
+            opcode: "sort",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'sort [NAME] [ORDER]',
+            text: "sort [NAME] [ORDER]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              ORDER: { type: Scratch.ArgumentType.STRING, menu: 'sortOrder' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              ORDER: { type: Scratch.ArgumentType.STRING, menu: "sortOrder" },
+            },
           },
           {
-            opcode: 'reverse',
+            opcode: "reverse",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'reverse [NAME]',
+            text: "reverse [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'sum',
+            opcode: "sum",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'sum of [NAME]',
+            text: "sum of [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'mean',
+            opcode: "mean",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'mean of [NAME]',
+            text: "mean of [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'min',
+            opcode: "min",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'min of [NAME]',
+            text: "min of [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'max',
+            opcode: "max",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'max of [NAME]',
+            text: "max of [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'transpose',
+            opcode: "transpose",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'transpose [NAME]',
+            text: "transpose [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+            },
           },
           {
-            opcode: 'flatten',
+            opcode: "flatten",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'flatten [NAME]',
+            text: "flatten [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'matrix' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "matrix",
+              },
+            },
           },
           {
-            opcode: 'reshape',
+            opcode: "reshape",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'reshape [NAME] to [SHAPE]',
+            text: "reshape [NAME] to [SHAPE]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' },
-              SHAPE: { type: Scratch.ArgumentType.STRING, defaultValue: '[3,3]' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+              SHAPE: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "[3,3]",
+              },
+            },
           },
-          '---',
+          "---",
           {
-            opcode: 'toJSON',
+            opcode: "toJSON",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'convert [NAME] to JSON',
+            text: "convert [NAME] to JSON",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'toString',
+            opcode: "toString",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'convert [NAME] to string',
+            text: "convert [NAME] to string",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'delete',
+            opcode: "delete",
             blockType: Scratch.BlockType.COMMAND,
-            text: 'delete array [NAME]',
+            text: "delete array [NAME]",
             arguments: {
-              NAME: { type: Scratch.ArgumentType.STRING, defaultValue: 'myArray' }
-            }
+              NAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "myArray",
+              },
+            },
           },
           {
-            opcode: 'listAll',
+            opcode: "listAll",
             blockType: Scratch.BlockType.REPORTER,
-            text: 'list all arrays'
-          }
+            text: "list all arrays",
+          },
         ],
         menus: {
           sortOrder: {
             acceptReporters: true,
-            items: ['ascending', 'descending']
-          }
-        }
+            items: ["ascending", "descending"],
+          },
+        },
       };
     }
 
     // Helper to parse value (try number, then JSON, then string)
     parseValue(val) {
-      if (val === '') return '';
+      if (val === "") return "";
       const num = Number(val);
       if (!isNaN(num)) return num;
       try {
@@ -406,7 +544,9 @@
           if (index === dims.length - 1) {
             return new Array(dims[index]).fill(0);
           }
-          return new Array(dims[index]).fill(null).map(() => createNDArray(dims, index + 1));
+          return new Array(dims[index])
+            .fill(null)
+            .map(() => createNDArray(dims, index + 1));
         };
         arrays[args.NAME] = createNDArray(shape);
       } catch (e) {
@@ -427,29 +567,29 @@
     // Get/Set operations
     get(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '';
+      if (!arr) return "";
       const idx = Number(args.INDEX);
       return JSON.stringify(arr[idx]);
     }
 
     get2D(args) {
       const arr = arrays[args.NAME];
-      if (!arr || !arr[args.ROW]) return '';
+      if (!arr || !arr[args.ROW]) return "";
       return arr[args.ROW][args.COL];
     }
 
     getMulti(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '';
+      if (!arr) return "";
       try {
         const indices = JSON.parse(args.INDICES);
         let result = arr;
         for (const idx of indices) {
           result = result[idx];
         }
-        return typeof result === 'object' ? JSON.stringify(result) : result;
+        return typeof result === "object" ? JSON.stringify(result) : result;
       } catch (e) {
-        return '';
+        return "";
       }
     }
 
@@ -491,7 +631,7 @@
 
     pop(args) {
       const arr = arrays[args.NAME];
-      if (!arr || arr.length === 0) return '';
+      if (!arr || arr.length === 0) return "";
       return arr.pop();
     }
 
@@ -515,8 +655,8 @@
 
     shape(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
-      
+      if (!arr) return "[]";
+
       const getShape = (a) => {
         if (!Array.isArray(a)) return [];
         const shape = [a.length];
@@ -525,7 +665,7 @@
         }
         return shape;
       };
-      
+
       return JSON.stringify(getShape(arr));
     }
 
@@ -546,67 +686,67 @@
     // Slicing and selection
     slice(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       const result = arr.slice(Number(args.START), Number(args.END));
       return JSON.stringify(result);
     }
 
     getRow(args) {
       const arr = arrays[args.NAME];
-      if (!arr || !arr[args.ROW]) return '[]';
+      if (!arr || !arr[args.ROW]) return "[]";
       return JSON.stringify(arr[args.ROW]);
     }
 
     getColumn(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       const col = Number(args.COL);
-      const result = arr.map(row => row[col]);
+      const result = arr.map((row) => row[col]);
       return JSON.stringify(result);
     }
 
     // Functional operations
     map(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       try {
         const func = eval(`(${args.FUNC})`);
         const result = arr.map(func);
         return JSON.stringify(result);
       } catch (e) {
-        return '[]';
+        return "[]";
       }
     }
 
     filter(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       try {
         const func = eval(`(${args.FUNC})`);
         const result = arr.filter(func);
         return JSON.stringify(result);
       } catch (e) {
-        return '[]';
+        return "[]";
       }
     }
 
     reduce(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '';
+      if (!arr) return "";
       try {
         const func = eval(`(${args.FUNC})`);
         const init = this.parseValue(args.INIT);
         return arr.reduce(func, init);
       } catch (e) {
-        return '';
+        return "";
       }
     }
 
     sort(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       const sorted = [...arr].sort((a, b) => {
-        if (args.ORDER === 'ascending') return a - b;
+        if (args.ORDER === "ascending") return a - b;
         return b - a;
       });
       return JSON.stringify(sorted);
@@ -614,7 +754,7 @@
 
     reverse(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       return JSON.stringify([...arr].reverse());
     }
 
@@ -622,14 +762,14 @@
     sum(args) {
       const arr = arrays[args.NAME];
       if (!arr) return 0;
-      const flatten = (a) => Array.isArray(a) ? a.flatMap(flatten) : [a];
+      const flatten = (a) => (Array.isArray(a) ? a.flatMap(flatten) : [a]);
       return flatten(arr).reduce((sum, x) => sum + Number(x || 0), 0);
     }
 
     mean(args) {
       const arr = arrays[args.NAME];
       if (!arr || arr.length === 0) return 0;
-      const flatten = (a) => Array.isArray(a) ? a.flatMap(flatten) : [a];
+      const flatten = (a) => (Array.isArray(a) ? a.flatMap(flatten) : [a]);
       const flat = flatten(arr);
       return flat.reduce((sum, x) => sum + Number(x || 0), 0) / flat.length;
     }
@@ -637,40 +777,40 @@
     min(args) {
       const arr = arrays[args.NAME];
       if (!arr) return 0;
-      const flatten = (a) => Array.isArray(a) ? a.flatMap(flatten) : [a];
+      const flatten = (a) => (Array.isArray(a) ? a.flatMap(flatten) : [a]);
       return Math.min(...flatten(arr).map(Number));
     }
 
     max(args) {
       const arr = arrays[args.NAME];
       if (!arr) return 0;
-      const flatten = (a) => Array.isArray(a) ? a.flatMap(flatten) : [a];
+      const flatten = (a) => (Array.isArray(a) ? a.flatMap(flatten) : [a]);
       return Math.max(...flatten(arr).map(Number));
     }
 
     // Advanced operations
     transpose(args) {
       const arr = arrays[args.NAME];
-      if (!arr || !arr[0]) return '[]';
-      const result = arr[0].map((_, i) => arr.map(row => row[i]));
+      if (!arr || !arr[0]) return "[]";
+      const result = arr[0].map((_, i) => arr.map((row) => row[i]));
       return JSON.stringify(result);
     }
 
     flatten(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
-      const flatten = (a) => Array.isArray(a) ? a.flatMap(flatten) : [a];
+      if (!arr) return "[]";
+      const flatten = (a) => (Array.isArray(a) ? a.flatMap(flatten) : [a]);
       return JSON.stringify(flatten(arr));
     }
 
     reshape(args) {
       const arr = arrays[args.NAME];
-      if (!arr) return '[]';
+      if (!arr) return "[]";
       try {
         const shape = JSON.parse(args.SHAPE);
-        const flatten = (a) => Array.isArray(a) ? a.flatMap(flatten) : [a];
+        const flatten = (a) => (Array.isArray(a) ? a.flatMap(flatten) : [a]);
         const flat = flatten(arr);
-        
+
         const reshape = (data, dims, index = 0) => {
           if (index === dims.length - 1) {
             return data.splice(0, dims[index]);
@@ -681,22 +821,22 @@
           }
           return result;
         };
-        
+
         return JSON.stringify(reshape([...flat], shape));
       } catch (e) {
-        return '[]';
+        return "[]";
       }
     }
 
     // Utility
     toJSON(args) {
       const arr = arrays[args.NAME];
-      return arr ? JSON.stringify(arr) : '[]';
+      return arr ? JSON.stringify(arr) : "[]";
     }
 
     toString(args) {
       const arr = arrays[args.NAME];
-      return arr ? arr.toString() : '';
+      return arr ? arr.toString() : "";
     }
 
     delete(args) {
