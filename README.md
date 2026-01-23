@@ -1,3 +1,71 @@
+# TurboWarp Extensions (mostly for LEGO Hubs)
+
+For some of these, if you use them on Desktop (Windows, MacOS), you need the LEGO SratchLink software as a bridge. Alternatively, some of my extensions support a custom bridge.
+
+For most most these, you must disable Sandbox Mode in TurboWarp.
+
+## LEGO Spike Prime = Robot Inventor Hub
+
+### Bluetooth Classic (BTC)
+
+Use **legospikeprime_btc.js**
+
+Note for this you need the older 2.x firmware firmware which works with Bluetooth Classics (BTC).
+
+You can switch firmwares by running upgrade from spike prime app, or downgrade https://spikelegacy.legoeducation.com/hubdowngrade/#step-1 or dfu-util/pybricksdev (backup/restore)
+
+### Bluetooth Low Energe (BLE)
+
+This is work in progress and i could net yet test it: **legospike_ble.js** 
+
+For this you need the newer firmware (you can upgrade from spike prime app).
+
+## LEGO Boost (BLE)
+
+Try **legoboost_scratchlink.js** (with ScratchLink installed).
+
+## LEGO EV3
+
+### Original Firmware 
+
+Connecting to the original Firmware would also be possible but only in direct streaming mode (controlling PC/Tablet must be active) (upload would require more efforts than i can invest atm at least).
+
+### EV3DEV Firmware
+
+With ev3dev, you have Linux on the device and can do lots of cool things.
+
+For instance, you can run a simple python bridge: **ev3_ondevice_bridge.py** which will support both streaming mode as well as uploading scripts directly from TurboWarp, from which we simply transpile them to python scripts and upload them.
+
+For this, you need **ev3_transpile.js** extension in TurboWarp.
+
+This is all work in progress.
+
+## LEGO NXT
+
+**legonxt-direct.js** will give you direct control of the NXT Brick. Note you probably must beforehand connect over your device Bluetooth Settings the Brick, then you will have it available for TurboWarp.
+
+**legonxt_turbowarp.js** uses a Websocket bridge script, **nxt_bridge.py** (older attempt: **lego_bridge.py**), which you must keep running. 
+
+(This is very much work in progress, and **nxt-diag.py** (connection tests), **nxt-pybluez-bridge.py** (exterimental alternative bridge), **reset_nxt.sh** (resets pairing on macOS) and **test_bt.py** (test BT discovery) are test/debug script artifacts which i keep here for now.)
+
+Below you find a few more technical details.
+
+## Non-LEGO Extensions
+
+### Math
+
+**csp.js** gives you a simple Constraint-Satisfaction-Problem solver
+
+**planetemaths.js** gives you some more basic maths ops etc. This is rewritten from the CodePM extension.
+
+**arrays.js** provides some handling for arrays / vectors / tensors.
+
+### Gamepad ###
+
+**gamepad.js** is untested yet.
+
+
+
 # LEGO NXT Bluetooth Control for TurboWarp
 
 Control LEGO Mindstorms NXT robots directly from TurboWarp using Bluetooth. This project provides both a WebSocket bridge for remote access and a direct Web Serial API extension for local connections.
@@ -134,8 +202,7 @@ You can inspect the COM port at `/dev/rfcomm0`
 | File | Description |
 |------|-------------|
 | `legonxt_turbowarp.js` | Lego NXT over local Python Bridge (Full feature set) |
-| `legonxt-direct-3.js` | Lego NXT Direct Bluetooth Connection (Development version) |
-| `legospike_btc.js` | LEGO Spike Prime v.2 (older firmware) extension (different project) |
+| `legonxt-direct.js` | Lego NXT Direct Bluetooth Connection (Development version) |
 
 ### Python Bridge
 
