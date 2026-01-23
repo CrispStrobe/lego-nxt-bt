@@ -33,7 +33,8 @@
     de: {
       extensionName: "LEGO EV3",
       motorTurnClockwise: "Motor [PORT] drehe so für [TIME] Sekunden",
-      motorTurnCounterClockwise: "Motor [PORT] drehe anders für [TIME] Sekunden",
+      motorTurnCounterClockwise:
+        "Motor [PORT] drehe anders für [TIME] Sekunden",
       motorSetPower: "Motor [PORT] setze Leistung [POWER] %",
       getMotorPosition: "Motor [PORT] Position",
       whenButtonPressed: "wenn Taste [PORT] gedrückt",
@@ -111,7 +112,10 @@
     try {
       const htmlLang = document.documentElement.lang;
       results.documentLang = htmlLang;
-      console.log("🌍 [EV3] 6. document.documentElement.lang:", htmlLang || "(empty)");
+      console.log(
+        "🌍 [EV3] 6. document.documentElement.lang:",
+        htmlLang || "(empty)",
+      );
     } catch (e) {
       results.documentLang = "error: " + e.message;
     }
@@ -136,9 +140,11 @@
     ) {
       console.log(
         "🌍 [EV3] ✓ Using TurboWarp localStorage:",
-        results.turboWarpLocalStorage
+        results.turboWarpLocalStorage,
       );
-      finalLanguage = results.turboWarpLocalStorage.toLowerCase().startsWith("de")
+      finalLanguage = results.turboWarpLocalStorage
+        .toLowerCase()
+        .startsWith("de")
         ? "de"
         : "en";
     } else if (
@@ -146,7 +152,10 @@
       typeof results.scratchVMLocale === "string" &&
       !results.scratchVMLocale.includes("error")
     ) {
-      console.log("🌍 [EV3] ✓ Using Scratch VM locale:", results.scratchVMLocale);
+      console.log(
+        "🌍 [EV3] ✓ Using Scratch VM locale:",
+        results.scratchVMLocale,
+      );
       finalLanguage = results.scratchVMLocale.toLowerCase().startsWith("de")
         ? "de"
         : "en";
@@ -158,7 +167,7 @@
     ) {
       console.log(
         "🌍 [EV3] ✓ Using document.documentElement.lang:",
-        results.documentLang
+        results.documentLang,
       );
       finalLanguage = results.documentLang.toLowerCase().startsWith("de")
         ? "de"
@@ -168,7 +177,10 @@
       typeof results.navigatorLanguage === "string" &&
       !results.navigatorLanguage.includes("error")
     ) {
-      console.log("🌍 [EV3] ✓ Using navigator.language:", results.navigatorLanguage);
+      console.log(
+        "🌍 [EV3] ✓ Using navigator.language:",
+        results.navigatorLanguage,
+      );
       finalLanguage = results.navigatorLanguage.toLowerCase().startsWith("de")
         ? "de"
         : "en";
@@ -179,9 +191,11 @@
     ) {
       console.log(
         "🌍 [EV3] ✓ Using navigator.languages[0]:",
-        results.navigatorLanguages[0]
+        results.navigatorLanguages[0],
       );
-      finalLanguage = results.navigatorLanguages[0].toLowerCase().startsWith("de")
+      finalLanguage = results.navigatorLanguages[0]
+        .toLowerCase()
+        .startsWith("de")
         ? "de"
         : "en";
     } else {
@@ -226,7 +240,10 @@
               : "en";
             if (newLang !== currentLang) {
               currentLang = newLang;
-              console.log("🌍 [EV3] Extension language updated to:", currentLang);
+              console.log(
+                "🌍 [EV3] Extension language updated to:",
+                currentLang,
+              );
             }
           }
         }
@@ -314,7 +331,7 @@
     _handleMessage(json) {
       if (json.jsonrpc !== "2.0") {
         throw new Error(
-          `Bad or missing JSON-RPC version in message: ${JSON.stringify(json)}`
+          `Bad or missing JSON-RPC version in message: ${JSON.stringify(json)}`,
         );
       }
       if (Object.prototype.hasOwnProperty.call(json, "method")) {
@@ -357,7 +374,7 @@
           },
           (error) => {
             this._sendResponse(id, null, error);
-          }
+          },
         );
       }
     }
@@ -373,7 +390,7 @@
       peripheralOptions,
       connectCallback,
       resetCallback = null,
-      messageCallback
+      messageCallback,
     ) {
       super();
       this._socket = runtime.getScratchLinkSocket("BT");
@@ -399,10 +416,10 @@
       if (this._discoverTimeoutID) window.clearTimeout(this._discoverTimeoutID);
       this._discoverTimeoutID = window.setTimeout(
         this._handleDiscoverTimeout.bind(this),
-        15000
+        15000,
       );
       this.sendRemoteRequest("discover", this._peripheralOptions).catch((e) =>
-        this._handleRequestError(e)
+        this._handleRequestError(e),
       );
     }
 
@@ -431,7 +448,7 @@
 
     sendMessage(options) {
       return this.sendRemoteRequest("send", options).catch((e) =>
-        this.handleDisconnectError(e)
+        this.handleDisconnectError(e),
       );
     }
 
@@ -441,7 +458,7 @@
           this._availablePeripherals[params.peripheralId] = params;
           this._runtime.emit(
             this._runtime.constructor.PERIPHERAL_LIST_UPDATE,
-            this._availablePeripherals
+            this._availablePeripherals,
           );
           if (this._discoverTimeoutID)
             window.clearTimeout(this._discoverTimeoutID);
@@ -450,7 +467,7 @@
           this._availablePeripherals[params.peripheralId] = params;
           this._runtime.emit(
             this._runtime.constructor.USER_PICKED_PERIPHERAL,
-            this._availablePeripherals
+            this._availablePeripherals,
           );
           if (this._discoverTimeoutID)
             window.clearTimeout(this._discoverTimeoutID);
@@ -477,7 +494,7 @@
         {
           message: `Scratch lost connection to`,
           extensionId: this._extensionId,
-        }
+        },
       );
     }
 
@@ -649,20 +666,20 @@
       }
 
       const runcmd = this._runValues(run);
-      byteCommand = byteCommand.concat([
-        Ev3Args.LAYER,
-        port,
-        Ev3Encoding.ONE_BYTE,
-        dir & 0xff,
-        Ev3Encoding.ONE_BYTE,
-        rampup,
-      ]).concat(
-        runcmd.concat([Ev3Encoding.ONE_BYTE, rampdown, Ev3Args.BRAKE])
-      );
+      byteCommand = byteCommand
+        .concat([
+          Ev3Args.LAYER,
+          port,
+          Ev3Encoding.ONE_BYTE,
+          dir & 0xff,
+          Ev3Encoding.ONE_BYTE,
+          rampup,
+        ])
+        .concat(runcmd.concat([Ev3Encoding.ONE_BYTE, rampdown, Ev3Args.BRAKE]));
 
       const cmd = this._parent.generateCommand(
         Ev3Command.DIRECT_COMMAND_NO_REPLY,
-        byteCommand
+        byteCommand,
       );
 
       this._parent.send(cmd);
@@ -693,7 +710,7 @@
           Ev3Args.LAYER,
           this._portMask(this._index),
           Ev3Args.COAST,
-        ]
+        ],
       );
 
       this._parent.send(cmd, false);
@@ -823,7 +840,7 @@
         },
         this._onConnect,
         this.reset,
-        this._onMessage
+        this._onMessage,
       );
     }
 
@@ -897,7 +914,7 @@
     _onConnect() {
       this._pollingIntervalID = window.setInterval(
         this._pollValues,
-        this._pollingInterval
+        this._pollingInterval,
       );
     }
 
@@ -953,7 +970,7 @@
       const cmd = this.generateCommand(
         Ev3Command.DIRECT_COMMAND_REPLY,
         cmds,
-        allocation
+        allocation,
       );
 
       this.send(cmd);
@@ -1305,7 +1322,7 @@
     }
 
     _portToIndex(port) {
-      const portMap = { A: 0, B: 1, C: 2, D: 3, "1": 0, "2": 1, "3": 2, "4": 3 };
+      const portMap = { A: 0, B: 1, C: 2, D: 3, 1: 0, 2: 1, 3: 2, 4: 3 };
       return portMap[port] !== undefined ? portMap[port] : 0;
     }
 
