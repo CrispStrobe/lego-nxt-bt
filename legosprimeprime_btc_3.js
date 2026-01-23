@@ -1,9 +1,448 @@
 (function (Scratch) {
   "use strict";
 
+  if (!Scratch.extensions.unsandboxed) {
+    throw new Error("SPIKE Prime BTC extension must run unsandboxed");
+  }
+
+  console.log("🤖 [SPIKE] Extension loading...");
+
   const ArgumentType = Scratch.ArgumentType;
   const BlockType = Scratch.BlockType;
   const Cast = Scratch.Cast;
+
+  // ============================================================================
+  // TRANSLATIONS
+  // ============================================================================
+  const translations = {
+    en: {
+      extensionName: "SPIKE Prime Ultimate (BTC)",
+      // Movement
+      setMovementMotors: "set movement motors [PORT_A] and [PORT_B]",
+      moveForward: "move [DIRECTION] for [VALUE] [UNIT]",
+      steer: "start steering [STEERING]",
+      startTank: "start tank drive left [LEFT_SPEED] right [RIGHT_SPEED]",
+      setMovementSpeed: "set movement speed to [SPEED]%",
+      stopMovement: "stop movement",
+      // Motors
+      motorRunFor: "[PORT] run [DIRECTION] for [VALUE] [UNIT]",
+      motorRunToPosition: "[PORT] run to position [POSITION] degrees",
+      motorStart: "[PORT] start motor [DIRECTION]",
+      motorStop: "[PORT] stop motor",
+      motorSetSpeed: "[PORT] set speed to [SPEED] %",
+      motorSetStopAction: "[PORT] set stop action to [ACTION]",
+      getPosition: "[PORT] position",
+      getRelativePosition: "[PORT] relative position",
+      getAbsolutePosition: "[PORT] absolute position",
+      getSpeed: "[PORT] speed (deg/s)",
+      resetMotorPosition: "reset [PORT] motor position to [POSITION]",
+      // Display
+      displayText: "write [TEXT]",
+      displayImage: "turn on [MATRIX]",
+      displayPattern: "display pattern [PATTERN]",
+      displayClear: "turn off pixels",
+      setPixel: "set pixel [X] [Y] to [BRIGHTNESS] %",
+      rotateDisplay: "rotate display [ANGLE] degrees",
+      setCenterButtonColor: "set center button to [COLOR]",
+      // IMU
+      getAngle: "[AXIS] angle",
+      getGyroRate: "gyro rate [AXIS] (deg/s)",
+      getFilteredGyroRate: "filtered gyro rate [AXIS] (deg/s)",
+      getAcceleration: "acceleration [AXIS] (milli-g)",
+      getFilteredAcceleration: "filtered acceleration [AXIS] (milli-g)",
+      resetYaw: "reset yaw angle",
+      presetYaw: "preset yaw to [ANGLE] degrees",
+      // 3x3 Matrix
+      setMatrix3x3ColorGrid:
+        "set [PORT] 3x3 colors: [P1][P2][P3] [P4][P5][P6] [P7][P8][P9]",
+      setMatrix3x3Custom: "set [PORT] 3x3 custom pattern [PATTERN]",
+      setMatrix3x3SolidColor:
+        "set [PORT] 3x3 matrix all [COLOR] brightness [BRIGHTNESS]",
+      clearMatrix3x3: "clear [PORT] 3x3 matrix",
+      // Gestures
+      whenGesture: "when hub [GESTURE]",
+      isGesture: "hub [GESTURE]?",
+      getOrientation: "orientation",
+      // Sound
+      playHubSound: "play hub sound [SOUND]",
+      playBeep: "beep [FREQUENCY] Hz for [DURATION] ms",
+      playNote: "play note [NOTE] for [SECS] seconds",
+      playWaveBeep: "beep [WAVEFORM] [FREQUENCY] Hz for [DURATION] ms",
+      setVolume: "set volume to [VOLUME]%",
+      stopSound: "stop all sounds",
+      // Status
+      getBatteryLevel: "battery level %",
+      getBatteryTemperature: "battery temperature",
+      getHubTemperature: "hub temperature",
+      getHubCurrent: "hub current (mA)",
+      getHubVoltage: "hub voltage (mV)",
+      // Timer
+      getTimer: "timer",
+      resetTimer: "reset timer",
+      // Sensors
+      getDistance: "[PORT] distance",
+      setDistanceLights: "set [PORT] distance lights [TL] [TR] [BL] [BR]",
+      getColor: "[PORT] color",
+      getReflection: "[PORT] reflection",
+      getAmbientLight: "[PORT] ambient light",
+      getForce: "[PORT] force",
+      isForceSensorPressed: "[PORT] force sensor pressed?",
+      whenColor: "when [PORT] sees [COLOR]",
+      isColor: "[PORT] sees [COLOR]?",
+      whenForceSensor: "when [PORT] is [STATE]",
+      // Buttons
+      isButtonPressed: "[BUTTON] button pressed?",
+      whenButtonPressed: "when [BUTTON] button pressed",
+      // File System
+      writeLogFile: "append [TEXT] to log file [FILENAME]",
+      readLogFile: "read log file [FILENAME]",
+      deleteLogFile: "delete file [FILENAME]",
+      listFiles: "list files",
+      // Python
+      runReplCommand: "run Python REPL: [CODE]",
+      getReplOutput: "REPL output",
+      clearReplOutput: "clear REPL output",
+      getReplHistory: "REPL command [INDEX]",
+      runPythonCommand: "run Python: [CODE]",
+      runHubCommand: "run hub command: [CODE]",
+      exitScript: "exit Python script",
+      // Menus
+      forward: "forward",
+      backward: "backward",
+      left: "left",
+      right: "right",
+      tapped: "tapped",
+      doubletapped: "doubletapped",
+      shake: "shake",
+      freefall: "freefall",
+    },
+    de: {
+      extensionName: "SPIKE Prime Ultimate (BTC)",
+      // Movement
+      setMovementMotors: "setze Bewegungsmotoren [PORT_A] und [PORT_B]",
+      moveForward: "bewege [DIRECTION] für [VALUE] [UNIT]",
+      steer: "starte Lenkung [STEERING]",
+      startTank: "starte Kettenantrieb links [LEFT_SPEED] rechts [RIGHT_SPEED]",
+      setMovementSpeed: "setze Bewegungsgeschwindigkeit auf [SPEED]%",
+      stopMovement: "stoppe Bewegung",
+      // Motors
+      motorRunFor: "[PORT] läuft [DIRECTION] für [VALUE] [UNIT]",
+      motorRunToPosition: "[PORT] läuft zu Position [POSITION] Grad",
+      motorStart: "[PORT] starte Motor [DIRECTION]",
+      motorStop: "[PORT] stoppe Motor",
+      motorSetSpeed: "[PORT] setze Geschwindigkeit auf [SPEED] %",
+      motorSetStopAction: "[PORT] setze Stopp-Aktion auf [ACTION]",
+      getPosition: "[PORT] Position",
+      getRelativePosition: "[PORT] relative Position",
+      getAbsolutePosition: "[PORT] absolute Position",
+      getSpeed: "[PORT] Geschwindigkeit (Grad/s)",
+      resetMotorPosition: "setze [PORT] Motorposition auf [POSITION] zurück",
+      // Display
+      displayText: "schreibe [TEXT]",
+      displayImage: "schalte [MATRIX] ein",
+      displayPattern: "zeige Muster [PATTERN]",
+      displayClear: "schalte Pixel aus",
+      setPixel: "setze Pixel [X] [Y] auf [BRIGHTNESS] %",
+      rotateDisplay: "drehe Display um [ANGLE] Grad",
+      setCenterButtonColor: "setze mittlere Taste auf [COLOR]",
+      // IMU
+      getAngle: "[AXIS] Winkel",
+      getGyroRate: "Gyro-Rate [AXIS] (Grad/s)",
+      getFilteredGyroRate: "gefilterte Gyro-Rate [AXIS] (Grad/s)",
+      getAcceleration: "Beschleunigung [AXIS] (Milli-g)",
+      getFilteredAcceleration: "gefilterte Beschleunigung [AXIS] (Milli-g)",
+      resetYaw: "setze Gier-Winkel zurück",
+      presetYaw: "setze Gier-Winkel auf [ANGLE] Grad",
+      // 3x3 Matrix
+      setMatrix3x3ColorGrid:
+        "setze [PORT] 3x3 Farben: [P1][P2][P3] [P4][P5][P6] [P7][P8][P9]",
+      setMatrix3x3Custom: "setze [PORT] 3x3 eigenes Muster [PATTERN]",
+      setMatrix3x3SolidColor:
+        "setze [PORT] 3x3 Matrix alle [COLOR] Helligkeit [BRIGHTNESS]",
+      clearMatrix3x3: "lösche [PORT] 3x3 Matrix",
+      // Gestures
+      whenGesture: "wenn Hub [GESTURE]",
+      isGesture: "Hub [GESTURE]?",
+      getOrientation: "Ausrichtung",
+      // Sound
+      playHubSound: "spiele Hub-Sound [SOUND]",
+      playBeep: "Piep [FREQUENCY] Hz für [DURATION] ms",
+      playNote: "spiele Note [NOTE] für [SECS] Sekunden",
+      playWaveBeep: "Piep [WAVEFORM] [FREQUENCY] Hz für [DURATION] ms",
+      setVolume: "setze Lautstärke auf [VOLUME]%",
+      stopSound: "stoppe alle Töne",
+      // Status
+      getBatteryLevel: "Batteriestand %",
+      getBatteryTemperature: "Batterietemperatur",
+      getHubTemperature: "Hub-Temperatur",
+      getHubCurrent: "Hub-Strom (mA)",
+      getHubVoltage: "Hub-Spannung (mV)",
+      // Timer
+      getTimer: "Timer",
+      resetTimer: "setze Timer zurück",
+      // Sensors
+      getDistance: "[PORT] Abstand",
+      setDistanceLights: "setze [PORT] Abstandslichter [TL] [TR] [BL] [BR]",
+      getColor: "[PORT] Farbe",
+      getReflection: "[PORT] Reflexion",
+      getAmbientLight: "[PORT] Umgebungslicht",
+      getForce: "[PORT] Kraft",
+      isForceSensorPressed: "[PORT] Kraftsensor gedrückt?",
+      whenColor: "wenn [PORT] sieht [COLOR]",
+      isColor: "[PORT] sieht [COLOR]?",
+      whenForceSensor: "wenn [PORT] ist [STATE]",
+      // Buttons
+      isButtonPressed: "[BUTTON] Taste gedrückt?",
+      whenButtonPressed: "wenn [BUTTON] Taste gedrückt",
+      // File System
+      writeLogFile: "füge [TEXT] zu Log-Datei [FILENAME] hinzu",
+      readLogFile: "lese Log-Datei [FILENAME]",
+      deleteLogFile: "lösche Datei [FILENAME]",
+      listFiles: "liste Dateien auf",
+      // Python
+      runReplCommand: "führe Python REPL aus: [CODE]",
+      getReplOutput: "REPL-Ausgabe",
+      clearReplOutput: "lösche REPL-Ausgabe",
+      getReplHistory: "REPL-Befehl [INDEX]",
+      runPythonCommand: "führe Python aus: [CODE]",
+      runHubCommand: "führe Hub-Befehl aus: [CODE]",
+      exitScript: "beende Python-Skript",
+      // Menus
+      forward: "vorwärts",
+      backward: "rückwärts",
+      left: "links",
+      right: "rechts",
+      tapped: "angetippt",
+      doubletapped: "doppelt angetippt",
+      shake: "geschüttelt",
+      freefall: "freier Fall",
+    },
+  };
+
+  // ============================================================================
+  // LANGUAGE DETECTION
+  // ============================================================================
+  function detectLanguage() {
+    const results = {};
+    let finalLanguage = "en";
+
+    console.log("🌍 [SPIKE] === LANGUAGE DETECTION DEBUG ===");
+
+    // Method 1: navigator.language
+    try {
+      results.navigatorLanguage = navigator.language;
+      console.log("🌍 [SPIKE] 1. navigator.language:", navigator.language);
+    } catch (e) {
+      results.navigatorLanguage = "error: " + e.message;
+    }
+
+    // Method 2: navigator.languages array
+    try {
+      results.navigatorLanguages = navigator.languages;
+      console.log("🌍 [SPIKE] 2. navigator.languages:", navigator.languages);
+    } catch (e) {
+      results.navigatorLanguages = "error: " + e.message;
+    }
+
+    // Method 3: TurboWarp localStorage
+    try {
+      const twSettings = localStorage.getItem("tw:language");
+      results.turboWarpLocalStorage = twSettings;
+      console.log("🌍 [SPIKE] 3. TurboWarp localStorage:", twSettings);
+    } catch (e) {
+      results.turboWarpLocalStorage = "error: " + e.message;
+    }
+
+    // Method 4: Scratch VM locale
+    try {
+      if (typeof Scratch !== "undefined" && Scratch.vm && Scratch.vm.runtime) {
+        const vmLocale = Scratch.vm.runtime.getLocale
+          ? Scratch.vm.runtime.getLocale()
+          : null;
+        results.scratchVMLocale = vmLocale;
+        console.log("🌍 [SPIKE] 4. Scratch VM locale:", vmLocale);
+      } else {
+        results.scratchVMLocale = null;
+      }
+    } catch (e) {
+      results.scratchVMLocale = "error: " + e.message;
+    }
+
+    // Method 5: Redux store
+    try {
+      if (
+        typeof window !== "undefined" &&
+        window.ReduxStore &&
+        window.ReduxStore.getState
+      ) {
+        const state = window.ReduxStore.getState();
+        const reduxLocale = state.locales?.locale;
+        results.reduxStore = reduxLocale;
+        console.log("🌍 [SPIKE] 5. Redux store locale:", reduxLocale);
+      } else {
+        results.reduxStore = "not available";
+      }
+    } catch (e) {
+      results.reduxStore = "error: " + e.message;
+    }
+
+    // Method 6: document.documentElement.lang
+    try {
+      const htmlLang = document.documentElement.lang;
+      results.documentLang = htmlLang;
+      console.log(
+        "🌍 [SPIKE] 6. document.documentElement.lang:",
+        htmlLang || "(empty)",
+      );
+    } catch (e) {
+      results.documentLang = "error: " + e.message;
+    }
+
+    console.log("\n🌍 [SPIKE] === ALL DETECTION RESULTS ===");
+    console.log(JSON.stringify(results, null, 2));
+
+    // Decision logic - Priority order
+    console.log("\n🌍 [SPIKE] === DECISION LOGIC ===");
+
+    // Priority 1: Redux store
+    if (
+      results.reduxStore &&
+      typeof results.reduxStore === "string" &&
+      !results.reduxStore.includes("error") &&
+      results.reduxStore !== "not available"
+    ) {
+      console.log("🌍 [SPIKE] ✓ Using Redux store locale:", results.reduxStore);
+      finalLanguage = results.reduxStore.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 2: TurboWarp localStorage
+    else if (
+      results.turboWarpLocalStorage &&
+      typeof results.turboWarpLocalStorage === "string" &&
+      !results.turboWarpLocalStorage.includes("error")
+    ) {
+      console.log(
+        "🌍 [SPIKE] ✓ Using TurboWarp localStorage:",
+        results.turboWarpLocalStorage,
+      );
+      finalLanguage = results.turboWarpLocalStorage
+        .toLowerCase()
+        .startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 3: Scratch VM locale
+    else if (
+      results.scratchVMLocale &&
+      typeof results.scratchVMLocale === "string" &&
+      !results.scratchVMLocale.includes("error")
+    ) {
+      console.log(
+        "🌍 [SPIKE] ✓ Using Scratch VM locale:",
+        results.scratchVMLocale,
+      );
+      finalLanguage = results.scratchVMLocale.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 4: document.documentElement.lang
+    else if (
+      results.documentLang &&
+      typeof results.documentLang === "string" &&
+      results.documentLang !== "" &&
+      !results.documentLang.includes("error")
+    ) {
+      console.log(
+        "🌍 [SPIKE] ✓ Using document.documentElement.lang:",
+        results.documentLang,
+      );
+      finalLanguage = results.documentLang.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 5: navigator.language
+    else if (
+      results.navigatorLanguage &&
+      typeof results.navigatorLanguage === "string" &&
+      !results.navigatorLanguage.includes("error")
+    ) {
+      console.log(
+        "🌍 [SPIKE] ✓ Using navigator.language:",
+        results.navigatorLanguage,
+      );
+      finalLanguage = results.navigatorLanguage.toLowerCase().startsWith("de")
+        ? "de"
+        : "en";
+    }
+    // Priority 6: navigator.languages
+    else if (
+      results.navigatorLanguages &&
+      Array.isArray(results.navigatorLanguages) &&
+      results.navigatorLanguages.length > 0
+    ) {
+      console.log(
+        "🌍 [SPIKE] ✓ Using navigator.languages[0]:",
+        results.navigatorLanguages[0],
+      );
+      finalLanguage = results.navigatorLanguages[0]
+        .toLowerCase()
+        .startsWith("de")
+        ? "de"
+        : "en";
+    } else {
+      console.log("🌍 [SPIKE] ✗ No locale detected, using default: en");
+    }
+
+    console.log("\n🌍 [SPIKE] === FINAL DECISION ===");
+    console.log("🌍 [SPIKE] Selected language:", finalLanguage);
+    console.log("🌍 [SPIKE] ================================\n");
+
+    return finalLanguage;
+  }
+
+  let currentLang = detectLanguage();
+
+  function t(key) {
+    return translations[currentLang]?.[key] || translations["en"][key] || key;
+  }
+
+  // Watch for language changes
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (e) => {
+      if (e.key === "tw:language") {
+        console.log("🌍 [SPIKE] TurboWarp language changed, re-detecting...");
+        const newLang = detectLanguage();
+        if (newLang !== currentLang) {
+          currentLang = newLang;
+          console.log("🌍 [SPIKE] Language updated to:", currentLang);
+        }
+      }
+    });
+
+    let lastKnownLocale = null;
+    setInterval(() => {
+      try {
+        if (window.ReduxStore && window.ReduxStore.getState) {
+          const state = window.ReduxStore.getState();
+          const currentLocale = state.locales?.locale;
+          if (currentLocale && currentLocale !== lastKnownLocale) {
+            lastKnownLocale = currentLocale;
+            const newLang = currentLocale.toLowerCase().startsWith("de")
+              ? "de"
+              : "en";
+            if (newLang !== currentLang) {
+              currentLang = newLang;
+              console.log(
+                "🌍 [SPIKE] Extension language updated to:",
+                currentLang,
+              );
+            }
+          }
+        }
+      } catch (e) {}
+    }, 1000);
+  }
 
   // ============================================================================
   // UTILITY FUNCTIONS
@@ -135,7 +574,7 @@
   }
 
   // ============================================================================
-  // BT (BLUETOOTH CLASSIC) CLASS
+  // BT CLASS
   // ============================================================================
   class BT extends JSONRPC {
     constructor(
@@ -147,15 +586,12 @@
       messageCallback,
     ) {
       super();
-
       this._socket = runtime.getScratchLinkSocket("BT");
       this._socket.setOnOpen(this.requestPeripheral.bind(this));
       this._socket.setOnClose(this.handleDisconnectError.bind(this));
       this._socket.setOnError(this._handleRequestError.bind(this));
       this._socket.setHandleMessage(this._handleMessage.bind(this));
-
       this._sendMessage = this._socket.sendMessage.bind(this._socket);
-
       this._availablePeripherals = {};
       this._connectCallback = connectCallback;
       this._connected = false;
@@ -165,15 +601,12 @@
       this._peripheralOptions = peripheralOptions;
       this._messageCallback = messageCallback;
       this._runtime = runtime;
-
       this._socket.open();
     }
 
     requestPeripheral() {
       this._availablePeripherals = {};
-      if (this._discoverTimeoutID) {
-        window.clearTimeout(this._discoverTimeoutID);
-      }
+      if (this._discoverTimeoutID) window.clearTimeout(this._discoverTimeoutID);
       this._discoverTimeoutID = window.setTimeout(
         this._handleDiscoverTimeout.bind(this),
         15000,
@@ -279,7 +712,6 @@
 
   const BTSendRateMax = 40;
   const SpikePorts = ["A", "B", "C", "D", "E", "F"];
-
   const SpikeMotorStopMode = { float: 0, brake: 1, hold: 2 };
   const SpikeOrientation = {
     front: 1,
@@ -289,7 +721,6 @@
     rightside: 5,
     leftside: 6,
   };
-
   const HubSoundFiles = [
     "menu_click",
     "menu_fastback",
@@ -298,7 +729,6 @@
     "menu_shutdown",
     "startup",
   ];
-
   const ColorEmojiMap = {
     "⚫": 0,
     "🟣": 1,
@@ -312,7 +742,6 @@
     "🔴": 9,
     "⚪": 10,
   };
-
   const DisplayPatterns = {
     heart: "960000960960a60960960000960",
     smile: "760076000078000076000760",
@@ -335,7 +764,6 @@
     frame: "979797900009900099000979797",
     spiral: "979797060000900009000979797",
   };
-
   const CenterLEDColors = {
     OFF: 0,
     PINK: 1,
@@ -350,7 +778,6 @@
     WHITE: 10,
     GREY: 11,
   };
-
   const SoundWaveforms = {
     sin: "hub.sound.SOUND_SIN",
     square: "hub.sound.SOUND_SQUARE",
@@ -408,6 +835,7 @@
         battery: 100,
         temperature: 25,
         hubTemp: 25,
+        power: { current: 0, voltage: 0 }, // NEW: Power supervision
         gestures: {
           tapped: false,
           doubletapped: false,
@@ -494,6 +922,9 @@
     get hubTemp() {
       return this._sensors.hubTemp;
     }
+    get power() {
+      return this._sensors.power;
+    } // NEW
     get gestures() {
       return this._sensors.gestures;
     }
@@ -563,6 +994,7 @@
         battery: 100,
         temperature: 25,
         hubTemp: 25,
+        power: { current: 0, voltage: 0 },
         gestures: {
           tapped: false,
           doubletapped: false,
@@ -593,10 +1025,7 @@
       if (!this.isConnected()) return Promise.resolve();
       if (useLimiter && !this._rateLimiter.okayToSend())
         return Promise.resolve();
-
-      if (!id) {
-        return this._bt.sendMessage({ message: text });
-      }
+      if (!id) return this._bt.sendMessage({ message: text });
       const promise = new Promise((resolve, reject) => {
         this._openRequests[id] = { resolve, reject };
       });
@@ -619,7 +1048,6 @@
     sendReplCommand(pythonCode) {
       this._replHistory.push(pythonCode);
       if (this._replHistory.length > 50) this._replHistory.shift();
-
       const wrappedCode = `
 try:
     _result = eval("${pythonCode.replace(/"/g, '\\"')}")
@@ -656,6 +1084,9 @@ def continuous_sensor_loop():
             orientation = hub.motion.orientation()
             battery_temp = hub.battery.temperature()
             hub_temp = hub.temperature()
+            sup = hub.supervision.info()
+            current = sup.get('continuous_current', 0)
+            voltage = hub.battery.voltage()
             motor_data = {}
             for port in 'ABCDEF':
                 if hasattr(hub.port[port], 'motor'):
@@ -664,7 +1095,7 @@ def continuous_sensor_loop():
                         motor_data[port] = f"{speed},{rel_deg},{abs_deg},{pwm}"
                     except: pass
             motor_str = "|".join([f"{k}:{v}" for k, v in motor_data.items()])
-            print(f"SENSORS:{yaw_angle},{pitch_angle},{roll_angle}|{accel_x},{accel_y},{accel_z}|{orientation}|{battery_temp},{hub_temp}|{motor_str}")
+            print(f"SENSORS:{yaw_angle},{pitch_angle},{roll_angle}|{accel_x},{accel_y},{accel_z}|{orientation}|{battery_temp},{hub_temp}|{motor_str}|P:{current},{voltage}")
             for gesture in ['tapped', 'doubletapped', 'shake', 'freefall']:
                 if hub.motion.was_gesture(gesture):
                     print(f"GESTURE:{gesture.upper()}")
@@ -685,7 +1116,6 @@ continuous_sensor_loop()
       for (const responseText of responses) {
         const trimmedText = responseText.trim();
         if (!trimmedText) continue;
-
         try {
           const json = JSON.parse(trimmedText);
           this._parseResponse(json);
@@ -737,6 +1167,17 @@ continuous_sensor_loop()
                   };
                 }
               }
+            }
+            // NEW: Parse power data
+            if (parts.length >= 6 && parts[5].startsWith("P:")) {
+              const powerVals = parts[5]
+                .substring(2)
+                .split(",")
+                .map(parseFloat);
+              this._sensors.power = {
+                current: powerVals[0],
+                voltage: powerVals[1],
+              };
             }
           }
         } else if (dataText.startsWith("GESTURE:")) {
@@ -796,7 +1237,6 @@ continuous_sensor_loop()
         const port = SpikePorts[i];
         const deviceId = response.p[i][0];
         const values = response.p[i][1];
-
         switch (deviceId) {
           case 48:
           case 49:
@@ -811,7 +1251,7 @@ continuous_sensor_loop()
             };
             break;
           case 61:
-            if (values.length >= 4) {
+            if (values.length >= 4)
               this._portValues[port] = {
                 type: "color",
                 color: values[0],
@@ -821,7 +1261,6 @@ continuous_sensor_loop()
                 green: values[4] || 0,
                 blue: values[5] || 0,
               };
-            }
             break;
           case 62:
             this._portValues[port] = {
@@ -841,7 +1280,6 @@ continuous_sensor_loop()
             break;
         }
       }
-
       if (response.p.length > 8 && response.p[8] && response.p[8].length >= 3) {
         this._sensors.angle = {
           yaw: response.p[8][0],
@@ -856,9 +1294,8 @@ continuous_sensor_loop()
         const button = response.p[0];
         const pressed = response.p[1] === 1;
         const buttonIndex = { left: 0, center: 1, right: 2 }[button];
-        if (buttonIndex !== undefined) {
+        if (buttonIndex !== undefined)
           this._sensors.buttons[buttonIndex] = pressed ? 1 : 0;
-        }
       }
     }
 
@@ -866,7 +1303,6 @@ continuous_sensor_loop()
       if (SpikeOrientation.hasOwnProperty(response.p)) {
         this._sensors.orientation = SpikeOrientation[response.p];
       }
-
       const gestureMap = {
         tapped: "tapped",
         doubletapped: "doubletapped",
@@ -892,19 +1328,20 @@ continuous_sensor_loop()
         this.runtime = Scratch.vm.runtime;
       }
       this._peripheral = new SpikePrime(this.runtime, "spikeprime");
+      console.log("🤖 [SPIKE] Extension loaded - Language:", currentLang);
     }
 
     getInfo() {
       return {
         id: "spikeprime",
-        name: "SPIKE Prime Ultimate (BTC)",
+        name: t("extensionName"),
         blockIconURI: iconURI,
         showStatusButton: true,
         blocks: [
-          // Movement Controls
+          // Movement
           {
             opcode: "setMovementMotors",
-            text: "set movement motors [PORT_A] and [PORT_B]",
+            text: t("setMovementMotors"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT_A: {
@@ -921,7 +1358,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "moveForward",
-            text: "move [DIRECTION] for [VALUE] [UNIT]",
+            text: t("moveForward"),
             blockType: BlockType.COMMAND,
             arguments: {
               DIRECTION: {
@@ -939,7 +1376,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "steer",
-            text: "start steering [STEERING]",
+            text: t("steer"),
             blockType: BlockType.COMMAND,
             arguments: {
               STEERING: { type: ArgumentType.NUMBER, defaultValue: 50 },
@@ -947,7 +1384,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "startTank",
-            text: "start tank drive left [LEFT_SPEED] right [RIGHT_SPEED]",
+            text: t("startTank"),
             blockType: BlockType.COMMAND,
             arguments: {
               LEFT_SPEED: { type: ArgumentType.NUMBER, defaultValue: 50 },
@@ -956,7 +1393,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "setMovementSpeed",
-            text: "set movement speed to [SPEED]%",
+            text: t("setMovementSpeed"),
             blockType: BlockType.COMMAND,
             arguments: {
               SPEED: { type: ArgumentType.NUMBER, defaultValue: 50 },
@@ -964,14 +1401,14 @@ continuous_sensor_loop()
           },
           {
             opcode: "stopMovement",
-            text: "stop movement",
+            text: t("stopMovement"),
             blockType: BlockType.COMMAND,
           },
           "---",
-          // Motor Control
+          // Motors
           {
             opcode: "motorRunFor",
-            text: "[PORT] run [DIRECTION] for [VALUE] [UNIT]",
+            text: t("motorRunFor"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -994,7 +1431,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "motorRunToPosition",
-            text: "[PORT] run to position [POSITION] degrees",
+            text: t("motorRunToPosition"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1007,7 +1444,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "motorStart",
-            text: "[PORT] start motor [DIRECTION]",
+            text: t("motorStart"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1024,7 +1461,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "motorStop",
-            text: "[PORT] stop motor",
+            text: t("motorStop"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1036,7 +1473,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "motorSetSpeed",
-            text: "[PORT] set speed to [SPEED] %",
+            text: t("motorSetSpeed"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1049,7 +1486,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "motorSetStopAction",
-            text: "[PORT] set stop action to [ACTION]",
+            text: t("motorSetStopAction"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1066,7 +1503,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getPosition",
-            text: "[PORT] position",
+            text: t("getPosition"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1078,7 +1515,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getRelativePosition",
-            text: "[PORT] relative position",
+            text: t("getRelativePosition"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1090,7 +1527,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getAbsolutePosition",
-            text: "[PORT] absolute position",
+            text: t("getAbsolutePosition"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1102,7 +1539,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getSpeed",
-            text: "[PORT] speed (deg/s)",
+            text: t("getSpeed"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1114,7 +1551,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "resetMotorPosition",
-            text: "reset [PORT] motor position to [POSITION]",
+            text: t("resetMotorPosition"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1126,10 +1563,10 @@ continuous_sensor_loop()
             },
           },
           "---",
-          // Display Control
+          // Display
           {
             opcode: "displayText",
-            text: "write [TEXT]",
+            text: t("displayText"),
             blockType: BlockType.COMMAND,
             arguments: {
               TEXT: { type: ArgumentType.STRING, defaultValue: "Hello" },
@@ -1137,7 +1574,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "displayImage",
-            text: "turn on [MATRIX]",
+            text: t("displayImage"),
             blockType: BlockType.COMMAND,
             arguments: {
               MATRIX: {
@@ -1148,7 +1585,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "displayPattern",
-            text: "display pattern [PATTERN]",
+            text: t("displayPattern"),
             blockType: BlockType.COMMAND,
             arguments: {
               PATTERN: {
@@ -1160,12 +1597,12 @@ continuous_sensor_loop()
           },
           {
             opcode: "displayClear",
-            text: "turn off pixels",
+            text: t("displayClear"),
             blockType: BlockType.COMMAND,
           },
           {
             opcode: "setPixel",
-            text: "set pixel [X] [Y] to [BRIGHTNESS] %",
+            text: t("setPixel"),
             blockType: BlockType.COMMAND,
             arguments: {
               X: { type: ArgumentType.NUMBER, defaultValue: 3 },
@@ -1175,7 +1612,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "rotateDisplay",
-            text: "rotate display [ANGLE] degrees",
+            text: t("rotateDisplay"),
             blockType: BlockType.COMMAND,
             arguments: {
               ANGLE: {
@@ -1187,7 +1624,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "setCenterButtonColor",
-            text: "set center button to [COLOR]",
+            text: t("setCenterButtonColor"),
             blockType: BlockType.COMMAND,
             arguments: {
               COLOR: {
@@ -1201,7 +1638,7 @@ continuous_sensor_loop()
           // IMU & Gyro
           {
             opcode: "getAngle",
-            text: "[AXIS] angle",
+            text: t("getAngle"),
             blockType: BlockType.REPORTER,
             arguments: {
               AXIS: {
@@ -1213,7 +1650,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getGyroRate",
-            text: "gyro rate [AXIS] (deg/s)",
+            text: t("getGyroRate"),
             blockType: BlockType.REPORTER,
             arguments: {
               AXIS: {
@@ -1225,7 +1662,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getFilteredGyroRate",
-            text: "filtered gyro rate [AXIS] (deg/s)",
+            text: t("getFilteredGyroRate"),
             blockType: BlockType.REPORTER,
             arguments: {
               AXIS: {
@@ -1237,7 +1674,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getAcceleration",
-            text: "acceleration [AXIS] (milli-g)",
+            text: t("getAcceleration"),
             blockType: BlockType.REPORTER,
             arguments: {
               AXIS: {
@@ -1249,7 +1686,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getFilteredAcceleration",
-            text: "filtered acceleration [AXIS] (milli-g)",
+            text: t("getFilteredAcceleration"),
             blockType: BlockType.REPORTER,
             arguments: {
               AXIS: {
@@ -1261,22 +1698,22 @@ continuous_sensor_loop()
           },
           {
             opcode: "resetYaw",
-            text: "reset yaw angle",
+            text: t("resetYaw"),
             blockType: BlockType.COMMAND,
           },
           {
             opcode: "presetYaw",
-            text: "preset yaw to [ANGLE] degrees",
+            text: t("presetYaw"),
             blockType: BlockType.COMMAND,
             arguments: {
               ANGLE: { type: ArgumentType.NUMBER, defaultValue: 0 },
             },
           },
           "---",
-          // 3x3 LED Color Matrix
+          // 3x3 LED Matrix
           {
             opcode: "setMatrix3x3ColorGrid",
-            text: "set [PORT] 3x3 colors: [P1][P2][P3] [P4][P5][P6] [P7][P8][P9]",
+            text: t("setMatrix3x3ColorGrid"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1333,7 +1770,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "setMatrix3x3Custom",
-            text: "set [PORT] 3x3 custom pattern [PATTERN]",
+            text: t("setMatrix3x3Custom"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1349,7 +1786,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "setMatrix3x3SolidColor",
-            text: "set [PORT] 3x3 matrix all [COLOR] brightness [BRIGHTNESS]",
+            text: t("setMatrix3x3SolidColor"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1371,7 +1808,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "clearMatrix3x3",
-            text: "clear [PORT] 3x3 matrix",
+            text: t("clearMatrix3x3"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1386,7 +1823,7 @@ continuous_sensor_loop()
           {
             opcode: "whenGesture",
             blockType: BlockType.HAT,
-            text: "when hub [GESTURE]",
+            text: t("whenGesture"),
             arguments: {
               GESTURE: {
                 type: ArgumentType.STRING,
@@ -1398,7 +1835,7 @@ continuous_sensor_loop()
           {
             opcode: "isGesture",
             blockType: BlockType.BOOLEAN,
-            text: "hub [GESTURE]?",
+            text: t("isGesture"),
             arguments: {
               GESTURE: {
                 type: ArgumentType.STRING,
@@ -1409,14 +1846,14 @@ continuous_sensor_loop()
           },
           {
             opcode: "getOrientation",
-            text: "orientation",
+            text: t("getOrientation"),
             blockType: BlockType.REPORTER,
           },
           "---",
-          // Sound System
+          // Sound
           {
             opcode: "playHubSound",
-            text: "play hub sound [SOUND]",
+            text: t("playHubSound"),
             blockType: BlockType.COMMAND,
             arguments: {
               SOUND: {
@@ -1428,7 +1865,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "playBeep",
-            text: "beep [FREQUENCY] Hz for [DURATION] ms",
+            text: t("playBeep"),
             blockType: BlockType.COMMAND,
             arguments: {
               FREQUENCY: { type: ArgumentType.NUMBER, defaultValue: 440 },
@@ -1437,7 +1874,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "playNote",
-            text: "play note [NOTE] for [SECS] seconds",
+            text: t("playNote"),
             blockType: BlockType.COMMAND,
             arguments: {
               NOTE: { type: ArgumentType.NOTE, defaultValue: 60 },
@@ -1446,7 +1883,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "playWaveBeep",
-            text: "beep [WAVEFORM] [FREQUENCY] Hz for [DURATION] ms",
+            text: t("playWaveBeep"),
             blockType: BlockType.COMMAND,
             arguments: {
               WAVEFORM: {
@@ -1460,7 +1897,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "setVolume",
-            text: "set volume to [VOLUME]%",
+            text: t("setVolume"),
             blockType: BlockType.COMMAND,
             arguments: {
               VOLUME: { type: ArgumentType.NUMBER, defaultValue: 100 },
@@ -1468,43 +1905,53 @@ continuous_sensor_loop()
           },
           {
             opcode: "stopSound",
-            text: "stop all sounds",
+            text: t("stopSound"),
             blockType: BlockType.COMMAND,
           },
           "---",
-          // Status & Temperature
+          // Status & Power (NEW: Added power blocks)
           {
             opcode: "getBatteryLevel",
-            text: "battery level %",
+            text: t("getBatteryLevel"),
             blockType: BlockType.REPORTER,
           },
           {
             opcode: "getBatteryTemperature",
-            text: "battery temperature",
+            text: t("getBatteryTemperature"),
             blockType: BlockType.REPORTER,
           },
           {
             opcode: "getHubTemperature",
-            text: "hub temperature",
+            text: t("getHubTemperature"),
+            blockType: BlockType.REPORTER,
+          },
+          {
+            opcode: "getHubCurrent",
+            text: t("getHubCurrent"),
+            blockType: BlockType.REPORTER,
+          },
+          {
+            opcode: "getHubVoltage",
+            text: t("getHubVoltage"),
             blockType: BlockType.REPORTER,
           },
           "---",
           // Timer
           {
             opcode: "getTimer",
-            text: "timer",
+            text: t("getTimer"),
             blockType: BlockType.REPORTER,
           },
           {
             opcode: "resetTimer",
-            text: "reset timer",
+            text: t("resetTimer"),
             blockType: BlockType.COMMAND,
           },
           "---",
           // Sensors
           {
             opcode: "getDistance",
-            text: "[PORT] distance",
+            text: t("getDistance"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1516,7 +1963,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "setDistanceLights",
-            text: "set [PORT] distance lights [TL] [TR] [BL] [BR]",
+            text: t("setDistanceLights"),
             blockType: BlockType.COMMAND,
             arguments: {
               PORT: {
@@ -1532,7 +1979,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getColor",
-            text: "[PORT] color",
+            text: t("getColor"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1544,7 +1991,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getReflection",
-            text: "[PORT] reflection",
+            text: t("getReflection"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1556,7 +2003,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getAmbientLight",
-            text: "[PORT] ambient light",
+            text: t("getAmbientLight"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1568,7 +2015,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "getForce",
-            text: "[PORT] force",
+            text: t("getForce"),
             blockType: BlockType.REPORTER,
             arguments: {
               PORT: {
@@ -1580,7 +2027,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "isForceSensorPressed",
-            text: "[PORT] force sensor pressed?",
+            text: t("isForceSensorPressed"),
             blockType: BlockType.BOOLEAN,
             arguments: {
               PORT: {
@@ -1593,7 +2040,7 @@ continuous_sensor_loop()
           {
             opcode: "whenColor",
             blockType: BlockType.HAT,
-            text: "when [PORT] sees [COLOR]",
+            text: t("whenColor"),
             arguments: {
               PORT: {
                 type: ArgumentType.STRING,
@@ -1610,7 +2057,7 @@ continuous_sensor_loop()
           {
             opcode: "isColor",
             blockType: BlockType.BOOLEAN,
-            text: "[PORT] sees [COLOR]?",
+            text: t("isColor"),
             arguments: {
               PORT: {
                 type: ArgumentType.STRING,
@@ -1627,7 +2074,7 @@ continuous_sensor_loop()
           {
             opcode: "whenForceSensor",
             blockType: BlockType.HAT,
-            text: "when [PORT] is [STATE]",
+            text: t("whenForceSensor"),
             arguments: {
               PORT: {
                 type: ArgumentType.STRING,
@@ -1645,7 +2092,7 @@ continuous_sensor_loop()
           // Buttons
           {
             opcode: "isButtonPressed",
-            text: "[BUTTON] button pressed?",
+            text: t("isButtonPressed"),
             blockType: BlockType.BOOLEAN,
             arguments: {
               BUTTON: {
@@ -1658,7 +2105,7 @@ continuous_sensor_loop()
           {
             opcode: "whenButtonPressed",
             blockType: BlockType.HAT,
-            text: "when [BUTTON] button pressed",
+            text: t("whenButtonPressed"),
             arguments: {
               BUTTON: {
                 type: ArgumentType.STRING,
@@ -1668,10 +2115,42 @@ continuous_sensor_loop()
             },
           },
           "---",
+          // File System (NEW)
+          {
+            opcode: "writeLogFile",
+            text: t("writeLogFile"),
+            blockType: BlockType.COMMAND,
+            arguments: {
+              TEXT: { type: ArgumentType.STRING, defaultValue: "data" },
+              FILENAME: { type: ArgumentType.STRING, defaultValue: "log.txt" },
+            },
+          },
+          {
+            opcode: "readLogFile",
+            text: t("readLogFile"),
+            blockType: BlockType.REPORTER,
+            arguments: {
+              FILENAME: { type: ArgumentType.STRING, defaultValue: "log.txt" },
+            },
+          },
+          {
+            opcode: "deleteLogFile",
+            text: t("deleteLogFile"),
+            blockType: BlockType.COMMAND,
+            arguments: {
+              FILENAME: { type: ArgumentType.STRING, defaultValue: "log.txt" },
+            },
+          },
+          {
+            opcode: "listFiles",
+            text: t("listFiles"),
+            blockType: BlockType.REPORTER,
+          },
+          "---",
           // Python REPL
           {
             opcode: "runReplCommand",
-            text: "run Python REPL: [CODE]",
+            text: t("runReplCommand"),
             blockType: BlockType.COMMAND,
             arguments: {
               CODE: {
@@ -1682,17 +2161,17 @@ continuous_sensor_loop()
           },
           {
             opcode: "getReplOutput",
-            text: "REPL output",
+            text: t("getReplOutput"),
             blockType: BlockType.REPORTER,
           },
           {
             opcode: "clearReplOutput",
-            text: "clear REPL output",
+            text: t("clearReplOutput"),
             blockType: BlockType.COMMAND,
           },
           {
             opcode: "getReplHistory",
-            text: "REPL command [INDEX]",
+            text: t("getReplHistory"),
             blockType: BlockType.REPORTER,
             arguments: {
               INDEX: { type: ArgumentType.NUMBER, defaultValue: -1 },
@@ -1702,7 +2181,7 @@ continuous_sensor_loop()
           // Advanced Python
           {
             opcode: "runPythonCommand",
-            text: "run Python: [CODE]",
+            text: t("runPythonCommand"),
             blockType: BlockType.COMMAND,
             arguments: {
               CODE: {
@@ -1713,7 +2192,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "runHubCommand",
-            text: "run hub command: [CODE]",
+            text: t("runHubCommand"),
             blockType: BlockType.COMMAND,
             arguments: {
               CODE: { type: ArgumentType.STRING, defaultValue: "hub.status()" },
@@ -1721,7 +2200,7 @@ continuous_sensor_loop()
           },
           {
             opcode: "exitScript",
-            text: "exit Python script",
+            text: t("exitScript"),
             blockType: BlockType.COMMAND,
           },
         ],
@@ -1769,7 +2248,7 @@ continuous_sensor_loop()
           },
           GESTURE: {
             acceptReporters: false,
-            items: ["tapped", "doubletapped", "shake", "freefall"],
+            items: [t("tapped"), t("doubletapped"), t("shake"), t("freefall")],
           },
           HUB_SOUND: { acceptReporters: false, items: HubSoundFiles },
           WAVEFORM: {
@@ -1778,11 +2257,11 @@ continuous_sensor_loop()
           },
           BUTTON: {
             acceptReporters: false,
-            items: ["left", "center", "right", "connect"],
+            items: [t("left"), "center", t("right"), "connect"],
           },
           MOVE_DIRECTION: {
             acceptReporters: false,
-            items: ["forward", "backward"],
+            items: [t("forward"), t("backward")],
           },
           MOVE_UNIT: {
             acceptReporters: false,
@@ -1833,6 +2312,8 @@ continuous_sensor_loop()
       };
     }
 
+    // [IMPLEMENTATION METHODS CONTINUE IN NEXT MESSAGE DUE TO LENGTH]
+
     // Movement implementations
     setMovementMotors(args) {
       const portA = Cast.toString(args.PORT_A).trim().toUpperCase();
@@ -1847,7 +2328,6 @@ continuous_sensor_loop()
       const [portA] = this._peripheral._movementMotors;
       const speed = this._peripheral.motorSettings[portA].speed;
       const dirMultiplier = direction === "forward" ? 1 : -1;
-
       if (unit === "cm") {
         const rotations = value / 17.6;
         return this._peripheral.sendPythonCommand(
@@ -1902,7 +2382,6 @@ continuous_sensor_loop()
       const value = Cast.toNumber(args.VALUE);
       const unit = args.UNIT;
       const ports = this._validatePorts(Cast.toString(args.PORT));
-
       switch (unit) {
         case "rotations":
           return this._motorRunForDegrees(ports, direction, value * 360);
@@ -1993,10 +2472,7 @@ continuous_sensor_loop()
         const setting = this._peripheral.motorSettings[port];
         const standardCommand = this._peripheral.sendCommand(
           "scratch.motor_stop",
-          {
-            port: port,
-            stop: setting.stopMode,
-          },
+          { port: port, stop: setting.stopMode },
         );
         const altCommand = this._peripheral.sendPythonCommand(
           `import hub; hub.port.${port}.motor.stop()`,
@@ -2119,11 +2595,7 @@ continuous_sensor_loop()
       if (x < 0 || x > 4 || y < 0 || y > 4) return Promise.resolve();
       const standardCommand = this._peripheral.sendCommand(
         "scratch.display_set_pixel",
-        {
-          x: x,
-          y: y,
-          brightness: Math.round((brightness * 9) / 100),
-        },
+        { x: x, y: y, brightness: Math.round((brightness * 9) / 100) },
       );
       const altCommand = this._peripheral.sendPythonCommand(
         `import hub; hub.display.pixel(${x}, ${y}, ${Math.round((brightness * 9) / 100)})`,
@@ -2156,34 +2628,28 @@ continuous_sensor_loop()
       const axis = Cast.toString(args.AXIS);
       return this._peripheral.angle[axis] || 0;
     }
-
     getGyroRate(args) {
       const axis = Cast.toString(args.AXIS);
       return this._peripheral.gyro[axis] || 0;
     }
-
     getFilteredGyroRate(args) {
       const axis = Cast.toString(args.AXIS);
       return this._peripheral.gyroFiltered[axis] || 0;
     }
-
     getAcceleration(args) {
       const axis = Cast.toString(args.AXIS);
       return this._peripheral.acceleration[axis] || 0;
     }
-
     getFilteredAcceleration(args) {
       const axis = Cast.toString(args.AXIS);
       return this._peripheral.accelerationFiltered[axis] || 0;
     }
-
     resetYaw() {
       this._peripheral._timer.start = Date.now();
       return this._peripheral.sendPythonCommand(
         "import hub; hub.motion.reset_yaw()",
       );
     }
-
     presetYaw(args) {
       const angle = Cast.toNumber(args.ANGLE);
       return this._peripheral.sendPythonCommand(
@@ -2225,7 +2691,6 @@ continuous_sensor_loop()
         r: 9,
         w: 10,
       };
-
       try {
         const lines = pattern.split(/\n|\|/);
         const pixels = [];
@@ -2286,12 +2751,10 @@ continuous_sensor_loop()
     whenGesture(args) {
       return this.isGesture(args);
     }
-
     isGesture(args) {
       const gesture = Cast.toString(args.GESTURE);
       return this._peripheral.gestures[gesture] || false;
     }
-
     getOrientation() {
       const orientationNames = ["up", "front", "right", "down", "back", "left"];
       return orientationNames[this._peripheral.orientation] || "unknown";
@@ -2304,7 +2767,6 @@ continuous_sensor_loop()
         `import hub; hub.sound.play("/sounds/${sound}")`,
       );
     }
-
     playBeep(args) {
       const frequency = Cast.toNumber(args.FREQUENCY);
       const duration = Cast.toNumber(args.DURATION);
@@ -2317,7 +2779,6 @@ continuous_sensor_loop()
       );
       return standardCommand.catch(() => altCommand);
     }
-
     playNote(args) {
       const note = Cast.toNumber(args.NOTE);
       const secs = Cast.toNumber(args.SECS);
@@ -2327,7 +2788,6 @@ continuous_sensor_loop()
         `hub.sound.beep(${Math.round(freq)}, ${Math.round(secs * 1000)}, hub.sound.SOUND_SIN, ${volume})`,
       );
     }
-
     playWaveBeep(args) {
       const waveform = Cast.toString(args.WAVEFORM);
       const frequency = Cast.toNumber(args.FREQUENCY);
@@ -2337,35 +2797,36 @@ continuous_sensor_loop()
         `import hub; hub.sound.beep(${frequency}, ${duration}, ${waveformCode})`,
       );
     }
-
     setVolume(args) {
       const volume = Cast.toNumber(args.VOLUME);
       this._peripheral._volume = MathUtil.clamp(volume, 0, 100);
       return this._peripheral.sendPythonCommand(`hub.sound.volume(${volume})`);
     }
-
     stopSound() {
       return this._peripheral.stopSound();
     }
 
-    // Status & Temperature
+    // Status & Temperature & Power
     getBatteryLevel() {
       return this._peripheral.battery || 100;
     }
-
     getBatteryTemperature() {
       return this._peripheral.temperature || 25;
     }
-
     getHubTemperature() {
       return this._peripheral.hubTemp || 25;
     }
+    getHubCurrent() {
+      return this._peripheral.power.current || 0;
+    } // NEW
+    getHubVoltage() {
+      return this._peripheral.power.voltage || 0;
+    } // NEW
 
     // Timer
     getTimer() {
       return this._peripheral.timer;
     }
-
     resetTimer() {
       this._peripheral._timer.start = Date.now();
       this._peripheral._timer.current = 0;
@@ -2378,7 +2839,6 @@ continuous_sensor_loop()
       if (portData && portData.type === "distance") return portData.distance;
       return 0;
     }
-
     setDistanceLights(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const tl = MathUtil.clamp(Cast.toNumber(args.TL), 0, 9);
@@ -2389,7 +2849,6 @@ continuous_sensor_loop()
         `import hub; dist_sensor = hub.port.${port}.device; dist_sensor.mode(5, bytes([${tl}, ${tr}, ${bl}, ${br}]))`,
       );
     }
-
     getColor(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const portData = this._peripheral.portValues[port];
@@ -2411,7 +2870,6 @@ continuous_sensor_loop()
       }
       return "none";
     }
-
     getReflection(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const portData = this._peripheral.portValues[port];
@@ -2419,21 +2877,18 @@ continuous_sensor_loop()
         return portData.reflection || 0;
       return 0;
     }
-
     getAmbientLight(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const portData = this._peripheral.portValues[port];
       if (portData && portData.type === "color") return portData.ambient || 0;
       return 0;
     }
-
     getForce(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const portData = this._peripheral.portValues[port];
       if (portData && portData.type === "force") return portData.force || 0;
       return 0;
     }
-
     isForceSensorPressed(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const portData = this._peripheral.portValues[port];
@@ -2441,11 +2896,9 @@ continuous_sensor_loop()
         return portData.pressed || false;
       return false;
     }
-
     whenColor(args) {
       return this.isColor(args);
     }
-
     isColor(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const color = Cast.toString(args.COLOR);
@@ -2468,7 +2921,6 @@ continuous_sensor_loop()
       }
       return false;
     }
-
     whenForceSensor(args) {
       const port = Cast.toString(args.PORT).trim().toUpperCase();
       const state = Cast.toString(args.STATE);
@@ -2495,9 +2947,46 @@ continuous_sensor_loop()
       }
       return false;
     }
-
     whenButtonPressed(args) {
       return this.isButtonPressed(args);
+    }
+
+    // File System (NEW)
+    writeLogFile(args) {
+      const filename = Cast.toString(args.FILENAME).replace(
+        /[^a-zA-Z0-9._-]/g,
+        "",
+      );
+      const text = Cast.toString(args.TEXT).replace(/"/g, '\\"');
+      return this._peripheral.sendPythonCommand(
+        `with open("${filename}", "a") as f: f.write("${text}\\n")`,
+      );
+    }
+
+    readLogFile(args) {
+      const filename = Cast.toString(args.FILENAME).replace(
+        /[^a-zA-Z0-9._-]/g,
+        "",
+      );
+      return this._peripheral.sendReplCommand(
+        `print(open("${filename}", "r").read())`,
+      );
+    }
+
+    deleteLogFile(args) {
+      const filename = Cast.toString(args.FILENAME).replace(
+        /[^a-zA-Z0-9._-]/g,
+        "",
+      );
+      return this._peripheral.sendPythonCommand(
+        `import uos; uos.remove("${filename}")`,
+      );
+    }
+
+    listFiles() {
+      return this._peripheral.sendReplCommand(
+        'import uos; print(", ".join(uos.listdir()))',
+      );
     }
 
     // Python REPL
@@ -2505,15 +2994,12 @@ continuous_sensor_loop()
       const code = Cast.toString(args.CODE);
       return this._peripheral.sendReplCommand(code);
     }
-
     getReplOutput() {
       return this._peripheral.replOutput || "";
     }
-
     clearReplOutput() {
       this._peripheral._replOutput = "";
     }
-
     getReplHistory(args) {
       const index = Cast.toNumber(args.INDEX);
       const history = this._peripheral.replHistory;
@@ -2530,13 +3016,11 @@ continuous_sensor_loop()
       const code = Cast.toString(args.CODE);
       return this._peripheral.sendPythonCommand(code);
     }
-
     runHubCommand(args) {
       const code = Cast.toString(args.CODE);
       const pythonCode = `import hub; ${code}`;
       return this._peripheral.sendPythonCommand(pythonCode);
     }
-
     exitScript() {
       return this._peripheral.sendPythonCommand("raise SystemExit");
     }
@@ -2545,7 +3029,6 @@ continuous_sensor_loop()
     _noteToFrequency(note) {
       return Math.pow(2, (note - 69 + 12) / 12) * 440;
     }
-
     _validatePorts(text) {
       return text
         .toUpperCase()

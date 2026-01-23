@@ -91,7 +91,7 @@
     _handleMessage(json) {
       if (json.jsonrpc !== "2.0") {
         throw new Error(
-          `Bad or missing JSON-RPC version in message: ${JSON.stringify(json)}`
+          `Bad or missing JSON-RPC version in message: ${JSON.stringify(json)}`,
         );
       }
       if (Object.prototype.hasOwnProperty.call(json, "method")) {
@@ -137,7 +137,7 @@
           },
           (error) => {
             this._sendResponse(id, null, error);
-          }
+          },
         );
       }
     }
@@ -153,7 +153,7 @@
       peripheralOptions,
       connectCallback,
       resetCallback = null,
-      messageCallback
+      messageCallback,
     ) {
       super();
 
@@ -195,12 +195,12 @@
       }
       this._discoverTimeoutID = window.setTimeout(
         this._handleDiscoverTimeout.bind(this),
-        15000
+        15000,
       );
 
       console.log(
         "[BT] Sending discover request with options:",
-        this._peripheralOptions
+        this._peripheralOptions,
       );
       this.sendRemoteRequest("discover", this._peripheralOptions).catch((e) => {
         console.error("[BT] Discover error:", e);
@@ -261,7 +261,7 @@
           this._availablePeripherals[params.peripheralId] = params;
           this._runtime.emit(
             this._runtime.constructor.PERIPHERAL_LIST_UPDATE,
-            this._availablePeripherals
+            this._availablePeripherals,
           );
           if (this._discoverTimeoutID) {
             window.clearTimeout(this._discoverTimeoutID);
@@ -271,7 +271,7 @@
           this._availablePeripherals[params.peripheralId] = params;
           this._runtime.emit(
             this._runtime.constructor.USER_PICKED_PERIPHERAL,
-            this._availablePeripherals
+            this._availablePeripherals,
           );
           if (this._discoverTimeoutID) {
             window.clearTimeout(this._discoverTimeoutID);
@@ -308,7 +308,7 @@
         {
           message: `Scratch lost connection to`,
           extensionId: this._extensionId,
-        }
+        },
       );
     }
 
@@ -437,7 +437,7 @@
         this._runtime.on("PROJECT_STOP_ALL", this.stopAll.bind(this));
       } else {
         console.warn(
-          "[SPIKE] No runtime available - peripheral features may not work"
+          "[SPIKE] No runtime available - peripheral features may not work",
         );
       }
     }
@@ -504,7 +504,7 @@
           btConfig,
           this._onConnect,
           this.reset,
-          this._onMessage
+          this._onMessage,
         );
         console.log("[SPIKE] ✅ BT instance created successfully");
       } catch (error) {
@@ -730,7 +730,10 @@
   // ============================================================================
   class SpikePrimeExtension {
     constructor(runtime) {
-      console.log("[SPIKE Extension] Constructor called with runtime:", runtime);
+      console.log(
+        "[SPIKE Extension] Constructor called with runtime:",
+        runtime,
+      );
 
       this.runtime = runtime;
 
@@ -1058,13 +1061,10 @@
     displayImage(args) {
       const matrix = Cast.toString(args.MATRIX);
       const brightness = Math.round(
-        (9 * this._peripheral.pixelBrightness) / 100
+        (9 * this._peripheral.pixelBrightness) / 100,
       );
       const symbol = (matrix.replace(/\D/g, "") + "0".repeat(25)).slice(0, 25);
-      const image = symbol
-        .replace(/1/g, brightness)
-        .match(/.{5}/g)
-        .join(":");
+      const image = symbol.replace(/1/g, brightness).match(/.{5}/g).join(":");
       return this._peripheral.sendCommand("scratch.display_image", {
         image: image,
       });
