@@ -2720,30 +2720,44 @@
       }
 
       // Motor port menu
-        else if (opcode === "ev3lms_menu_motorPorts" || opcode === "ev3lms_motorPorts_menu") {
-        const value = this.getFieldValue(block, "motorPorts") || this.getFieldValue(block, "PORT");
+      else if (
+        opcode === "ev3lms_menu_motorPorts" ||
+        opcode === "ev3lms_motorPorts_menu"
+      ) {
+        const value =
+          this.getFieldValue(block, "motorPorts") ||
+          this.getFieldValue(block, "PORT");
         this.log(`Motor port menu: ${value}`, null, "DEBUG");
         return value || "A"; // Return raw port letter
-        }
+      }
 
-        // Sensor port menu
-        else if (opcode === "ev3lms_menu_sensorPorts" || opcode === "ev3lms_sensorPorts_menu") {
-        const value = this.getFieldValue(block, "sensorPorts") || this.getFieldValue(block, "PORT");
+      // Sensor port menu
+      else if (
+        opcode === "ev3lms_menu_sensorPorts" ||
+        opcode === "ev3lms_sensorPorts_menu"
+      ) {
+        const value =
+          this.getFieldValue(block, "sensorPorts") ||
+          this.getFieldValue(block, "PORT");
         this.log(`Sensor port menu: ${value}`, null, "DEBUG");
         return value || "1"; // Return raw port number
-        }
+      }
 
-        // Generic menu blocks
-        else if (opcode.endsWith("_menu") || opcode.includes("menu_")) {
+      // Generic menu blocks
+      else if (opcode.endsWith("_menu") || opcode.includes("menu_")) {
         const fieldNames = Object.keys(block.fields);
         if (fieldNames.length > 0) {
-            const value = this.getFieldValue(block, fieldNames[0]);
-            this.log(`Menu block evaluated: ${opcode} = ${value}`, null, "DEBUG");
-            return `'${value}'`; // SINGLE QUOTES
+          const value = this.getFieldValue(block, fieldNames[0]);
+          this.log(`Menu block evaluated: ${opcode} = ${value}`, null, "DEBUG");
+          return `'${value}'`; // SINGLE QUOTES
         }
-        this.log(`Menu block ${opcode} has no fields, using empty string`, null, "DEBUG");
+        this.log(
+          `Menu block ${opcode} has no fields, using empty string`,
+          null,
+          "DEBUG",
+        );
         return "''";
-        }
+      }
 
       // Default
       this.log(`WARNING: Unsupported reporter: ${opcode}`, null, "WARN");
@@ -3079,7 +3093,7 @@
             opcode: "testDiagnostics",
             blockType: Scratch.BlockType.COMMAND,
             text: "🔧 Show full transpilation diagnostics",
-            },
+          },
 
           "---",
 
@@ -3773,18 +3787,21 @@
     }
 
     testDiagnostics() {
-        console.log("Test diagnostics called");
-        console.log("Transpiler exists:", !!this.transpiler);
-        console.log("Errors:", this.transpiler?.errors);
-        console.log("Warnings:", this.transpiler?.warnings);
-        console.log("showFullDiagnostics method exists:", typeof this.showFullDiagnostics);
-        
-        if (typeof this.showFullDiagnostics === 'function') {
-            this.showFullDiagnostics();
-        } else {
-            alert("showFullDiagnostics method not found!");
-        }
-        }
+      console.log("Test diagnostics called");
+      console.log("Transpiler exists:", !!this.transpiler);
+      console.log("Errors:", this.transpiler?.errors);
+      console.log("Warnings:", this.transpiler?.warnings);
+      console.log(
+        "showFullDiagnostics method exists:",
+        typeof this.showFullDiagnostics,
+      );
+
+      if (typeof this.showFullDiagnostics === "function") {
+        this.showFullDiagnostics();
+      } else {
+        alert("showFullDiagnostics method not found!");
+      }
+    }
 
     showDebugLog() {
       if (!this.lmsCode) {
@@ -3814,61 +3831,64 @@
     }
 
     showFullDiagnostics() {
-  console.log("showFullDiagnostics called"); // Debug log
-  
-  let fullReport = "=== TRANSPILATION DIAGNOSTICS ===\n\n";
-  
-  fullReport += `Generated Code Length: ${this.lmsCode.length} characters\n`;
-  fullReport += `Total Lines: ${this.lmsCode.split('\n').length}\n`;
-  fullReport += `Errors: ${this.transpiler.errors.length}\n`;
-  fullReport += `Warnings: ${this.transpiler.warnings.length}\n\n`;
-  
-  if (this.transpiler.errors.length > 0) {
-    fullReport += "=== ERRORS ===\n";
-    this.transpiler.errors.forEach((err, i) => {
-      fullReport += `\nError ${i + 1}:\n`;
-      fullReport += `  Time: ${err.timestamp}\n`;
-      fullReport += `  Message: ${err.message}\n`;
-      if (err.data) {
-        fullReport += `  Details: ${JSON.stringify(err.data, null, 2)}\n`;
+      console.log("showFullDiagnostics called"); // Debug log
+
+      let fullReport = "=== TRANSPILATION DIAGNOSTICS ===\n\n";
+
+      fullReport += `Generated Code Length: ${this.lmsCode.length} characters\n`;
+      fullReport += `Total Lines: ${this.lmsCode.split("\n").length}\n`;
+      fullReport += `Errors: ${this.transpiler.errors.length}\n`;
+      fullReport += `Warnings: ${this.transpiler.warnings.length}\n\n`;
+
+      if (this.transpiler.errors.length > 0) {
+        fullReport += "=== ERRORS ===\n";
+        this.transpiler.errors.forEach((err, i) => {
+          fullReport += `\nError ${i + 1}:\n`;
+          fullReport += `  Time: ${err.timestamp}\n`;
+          fullReport += `  Message: ${err.message}\n`;
+          if (err.data) {
+            fullReport += `  Details: ${JSON.stringify(err.data, null, 2)}\n`;
+          }
+        });
+        fullReport += "\n";
       }
-    });
-    fullReport += "\n";
-  }
-  
-  if (this.transpiler.warnings.length > 0) {
-    fullReport += "=== WARNINGS ===\n";
-    this.transpiler.warnings.forEach((warn, i) => {
-      fullReport += `\nWarning ${i + 1}:\n`;
-      fullReport += `  Time: ${warn.timestamp}\n`;
-      fullReport += `  Message: ${warn.message}\n`;
-      if (warn.data) {
-        fullReport += `  Details: ${JSON.stringify(warn.data, null, 2)}\n`;
+
+      if (this.transpiler.warnings.length > 0) {
+        fullReport += "=== WARNINGS ===\n";
+        this.transpiler.warnings.forEach((warn, i) => {
+          fullReport += `\nWarning ${i + 1}:\n`;
+          fullReport += `  Time: ${warn.timestamp}\n`;
+          fullReport += `  Message: ${warn.message}\n`;
+          if (warn.data) {
+            fullReport += `  Details: ${JSON.stringify(warn.data, null, 2)}\n`;
+          }
+        });
+        fullReport += "\n";
       }
-    });
-    fullReport += "\n";
-  }
-  
-  if (this.transpiler.debugLog && this.transpiler.debugLog.length > 0) {
-    fullReport += "=== DEBUG LOG (Last 100 entries) ===\n";
-    const recentLogs = this.transpiler.debugLog.slice(-100);
-    recentLogs.forEach((log) => {
-      fullReport += `[${log.timestamp}] [${log.level}] ${log.message}\n`;
-      if (log.data) {
-        fullReport += `  Data: ${JSON.stringify(log.data)}\n`;
+
+      if (this.transpiler.debugLog && this.transpiler.debugLog.length > 0) {
+        fullReport += "=== DEBUG LOG (Last 100 entries) ===\n";
+        const recentLogs = this.transpiler.debugLog.slice(-100);
+        recentLogs.forEach((log) => {
+          fullReport += `[${log.timestamp}] [${log.level}] ${log.message}\n`;
+          if (log.data) {
+            fullReport += `  Data: ${JSON.stringify(log.data)}\n`;
+          }
+        });
+      } else {
+        fullReport += "=== DEBUG LOG ===\nNo debug entries available.\n";
       }
-    });
-  } else {
-    fullReport += "=== DEBUG LOG ===\nNo debug entries available.\n";
-  }
-  
-  console.log("Full report generated:", fullReport.substring(0, 200) + "..."); // Debug
-  this.showModal("Full Diagnostic Report", fullReport);
-}
+
+      console.log(
+        "Full report generated:",
+        fullReport.substring(0, 200) + "...",
+      ); // Debug
+      this.showModal("Full Diagnostic Report", fullReport);
+    }
 
     showDiagnosticsModal(message) {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
+      const modal = document.createElement("div");
+      modal.style.cssText = `
     position: fixed;
     top: 50%;
     left: 50%;
@@ -3886,12 +3906,12 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
-  const titleEl = document.createElement("h3");
-  titleEl.textContent = "Transpilation Results";
-  titleEl.style.cssText = "margin-top: 0; color: #7C3A9A; font-size: 20px;";
+      const titleEl = document.createElement("h3");
+      titleEl.textContent = "Transpilation Results";
+      titleEl.style.cssText = "margin-top: 0; color: #7C3A9A; font-size: 20px;";
 
-  const contentDiv = document.createElement("div");
-  contentDiv.style.cssText = `
+      const contentDiv = document.createElement("div");
+      contentDiv.style.cssText = `
     background: #f9f9f9;
     border: 1px solid #ddd;
     padding: 15px;
@@ -3903,52 +3923,68 @@
     font-size: 13px;
     line-height: 1.6;
   `;
-  
-  // Format the message with colors
-  const formattedMessage = message
-    .replace(/✅/g, '<span style="color: green; font-weight: bold;">✅</span>')
-    .replace(/❌/g, '<span style="color: red; font-weight: bold;">❌</span>')
-    .replace(/⚠️/g, '<span style="color: orange; font-weight: bold;">⚠️</span>')
-    .replace(/ERROR\(S\):/g, '<span style="color: red; font-weight: bold;">ERROR(S):</span>')
-    .replace(/WARNING\(S\):/g, '<span style="color: orange; font-weight: bold;">WARNING(S):</span>');
-  
-  contentDiv.innerHTML = formattedMessage;
 
-  const buttonContainer = document.createElement("div");
-  buttonContainer.style.cssText = "margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;";
+      // Format the message with colors
+      const formattedMessage = message
+        .replace(
+          /✅/g,
+          '<span style="color: green; font-weight: bold;">✅</span>',
+        )
+        .replace(
+          /❌/g,
+          '<span style="color: red; font-weight: bold;">❌</span>',
+        )
+        .replace(
+          /⚠️/g,
+          '<span style="color: orange; font-weight: bold;">⚠️</span>',
+        )
+        .replace(
+          /ERROR\(S\):/g,
+          '<span style="color: red; font-weight: bold;">ERROR(S):</span>',
+        )
+        .replace(
+          /WARNING\(S\):/g,
+          '<span style="color: orange; font-weight: bold;">WARNING(S):</span>',
+        );
 
-  // View Details button (opens full log)
-  const detailsBtn = document.createElement("button");
-  detailsBtn.textContent = "View Full Log";
-  detailsBtn.style.cssText =
-    "padding: 10px 20px; background: #5C2A7A; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;";
-  
-  // CRITICAL: Bind 'this' context properly
-  const self = this; // Store reference to extension instance
-  detailsBtn.onclick = function() {
-    console.log("View Full Log clicked"); // Debug
-    self.showFullDiagnostics(); // Call on the correct context
-  };
+      contentDiv.innerHTML = formattedMessage;
 
-  // Close button
-  const closeBtn = document.createElement("button");
-  closeBtn.textContent = "Close";
-  closeBtn.style.cssText =
-    "padding: 10px 20px; background: #7C3A9A; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;";
-  closeBtn.onclick = () => {
-    console.log("Close clicked"); // Debug
-    document.body.removeChild(modal);
-  };
+      const buttonContainer = document.createElement("div");
+      buttonContainer.style.cssText =
+        "margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;";
 
-  buttonContainer.appendChild(detailsBtn);
-  buttonContainer.appendChild(closeBtn);
+      // View Details button (opens full log)
+      const detailsBtn = document.createElement("button");
+      detailsBtn.textContent = "View Full Log";
+      detailsBtn.style.cssText =
+        "padding: 10px 20px; background: #5C2A7A; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;";
 
-  modal.appendChild(titleEl);
-  modal.appendChild(contentDiv);
-  modal.appendChild(buttonContainer);
+      // CRITICAL: Bind 'this' context properly
+      const self = this; // Store reference to extension instance
+      detailsBtn.onclick = function () {
+        console.log("View Full Log clicked"); // Debug
+        self.showFullDiagnostics(); // Call on the correct context
+      };
 
-  document.body.appendChild(modal);
-}
+      // Close button
+      const closeBtn = document.createElement("button");
+      closeBtn.textContent = "Close";
+      closeBtn.style.cssText =
+        "padding: 10px 20px; background: #7C3A9A; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;";
+      closeBtn.onclick = () => {
+        console.log("Close clicked"); // Debug
+        document.body.removeChild(modal);
+      };
+
+      buttonContainer.appendChild(detailsBtn);
+      buttonContainer.appendChild(closeBtn);
+
+      modal.appendChild(titleEl);
+      modal.appendChild(contentDiv);
+      modal.appendChild(buttonContainer);
+
+      document.body.appendChild(modal);
+    }
 
     copyToClipboard(text) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
