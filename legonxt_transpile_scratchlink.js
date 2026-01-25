@@ -10,7 +10,7 @@
   console.log("🧱 [LEGO NXT] Extension loading...");
 
   // ==================== DEBUG LOGGER ====================
-  
+
   class DebugLogger {
     constructor(prefix = "LEGO NXT") {
       this.prefix = prefix;
@@ -43,7 +43,7 @@
   const logger = new DebugLogger();
 
   // ==================== UTILITY FUNCTIONS ====================
-  
+
   const MathUtil = {
     clamp: (val, min, max) => Math.max(min, Math.min(val, max)),
     wrapClamp: (val, min, max) => {
@@ -81,7 +81,7 @@
   }
 
   // ==================== JSONRPC CLASS ====================
-  
+
   class JSONRPC {
     constructor() {
       this._requestID = 0;
@@ -170,7 +170,7 @@
   }
 
   // ==================== BT CLASS ====================
-  
+
   class BT extends JSONRPC {
     constructor(
       runtime,
@@ -344,6 +344,15 @@
     WRITE_IO_MAP: 0x95,
     BOOT_CMD: 0x97,
     SET_BRICK_NAME: 0x98,
+    GET_DEVICE_INFO: 0x9b,
+    READ_IO_MAP: 0x94,
+    WRITE_IO_MAP: 0x95,
+    MESSAGE_WRITE: 0x09,
+    MESSAGE_READ: 0x13,
+    START_PROGRAM: 0x00,
+    STOP_PROGRAM: 0x01,
+    KEEP_ALIVE: 0x0d,
+    LS_GET_STATUS: 0x0e,
     GET_DEVICE_INFO: 0x9b,
   };
 
@@ -535,7 +544,7 @@
 
   // ==================== NXC TRANSPILER ====================
   // [Keep the entire NXCTranspiler class from the previous version]
-  
+
   class NXCTranspiler {
     constructor() {
       this.code = [];
@@ -638,7 +647,12 @@
           const primitiveType = inputData[0];
           const primitiveValue = inputData[1];
 
-          if (primitiveType === 4 || primitiveType === 5 || primitiveType === 6 || primitiveType === 7) {
+          if (
+            primitiveType === 4 ||
+            primitiveType === 5 ||
+            primitiveType === 6 ||
+            primitiveType === 7
+          ) {
             return String(primitiveValue);
           } else if (primitiveType === 10) {
             if (this.isNumeric(primitiveValue)) {
@@ -651,7 +665,11 @@
           if (refBlock) return this.evaluateBlock(refBlock, blocks);
         }
 
-        if (inputType === 3 && Array.isArray(inputData) && inputData.length >= 2) {
+        if (
+          inputType === 3 &&
+          Array.isArray(inputData) &&
+          inputData.length >= 2
+        ) {
           if (typeof inputData[0] === "string") {
             const refBlock = blocks._blocks[inputData[0]];
             if (refBlock) return this.evaluateBlock(refBlock, blocks);
@@ -662,7 +680,12 @@
             const primitiveType = shadowData[0];
             const primitiveValue = shadowData[1];
 
-            if (primitiveType === 4 || primitiveType === 5 || primitiveType === 6 || primitiveType === 7) {
+            if (
+              primitiveType === 4 ||
+              primitiveType === 5 ||
+              primitiveType === 6 ||
+              primitiveType === 7
+            ) {
               return String(primitiveValue);
             } else if (primitiveType === 10) {
               if (this.isNumeric(primitiveValue)) {
@@ -678,135 +701,132 @@
     }
 
     evaluateBlock(block, blocks) {
-      if (block.opcode === "math_number" || block.opcode === "math_whole_number" || 
-          block.opcode === "math_positive_number" || block.opcode === "math_integer") {
+      if (
+        block.opcode === "math_number" ||
+        block.opcode === "math_whole_number" ||
+        block.opcode === "math_positive_number" ||
+        block.opcode === "math_integer"
+      ) {
         const num = this.getFieldValue(block, "NUM");
         return num || "0";
-      }
-      else if (block.opcode === "text") {
+      } else if (block.opcode === "text") {
         const text = this.getFieldValue(block, "TEXT");
         if (this.isNumeric(text)) return String(text);
         return '"' + (text || "").replace(/"/g, '\\"') + '"';
-      }
-      else if (block.opcode === "data_variable") {
+      } else if (block.opcode === "data_variable") {
         const varName = this.getFieldValue(block, "VARIABLE");
         return this.sanitizeName(varName);
-      }
-      else if (block.opcode === "motorPosition") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (block.opcode === "motorPosition") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         return `MotorRotationCount(OUT_${port})`;
-      }
-      else if (block.opcode === "touchPressed") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (block.opcode === "touchPressed") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`touch_${port}`);
         return `(SENSOR_${sensorNum} == 1)`;
-      }
-      else if (block.opcode === "lightValue") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (block.opcode === "lightValue") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`light_${port}`);
         return `Sensor(IN_${sensorNum})`;
-      }
-      else if (block.opcode === "soundValue") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (block.opcode === "soundValue") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`sound_${port}`);
         return `Sensor(IN_${sensorNum})`;
-      }
-      else if (block.opcode === "ultrasonicDist") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (block.opcode === "ultrasonicDist") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`ultrasonic_${port}`);
         return `SensorUS(IN_${sensorNum})`;
-      }
-      else if (block.opcode === "battery") {
+      } else if (block.opcode === "battery") {
         return "BatteryLevel()";
-      }
-      else if (block.opcode === "operator_gt") {
+      } else if (block.opcode === "operator_gt") {
         const op1 = this.getInputValue(block, "OPERAND1", blocks);
         const op2 = this.getInputValue(block, "OPERAND2", blocks);
         return `(${op1} > ${op2})`;
-      }
-      else if (block.opcode === "operator_lt") {
+      } else if (block.opcode === "operator_lt") {
         const op1 = this.getInputValue(block, "OPERAND1", blocks);
         const op2 = this.getInputValue(block, "OPERAND2", blocks);
         return `(${op1} < ${op2})`;
-      }
-      else if (block.opcode === "operator_equals") {
+      } else if (block.opcode === "operator_equals") {
         const op1 = this.getInputValue(block, "OPERAND1", blocks);
         const op2 = this.getInputValue(block, "OPERAND2", blocks);
         return `(${op1} == ${op2})`;
-      }
-      else if (block.opcode === "operator_and") {
+      } else if (block.opcode === "operator_and") {
         const op1 = this.getInputValue(block, "OPERAND1", blocks);
         const op2 = this.getInputValue(block, "OPERAND2", blocks);
         return `(${op1} && ${op2})`;
-      }
-      else if (block.opcode === "operator_or") {
+      } else if (block.opcode === "operator_or") {
         const op1 = this.getInputValue(block, "OPERAND1", blocks);
         const op2 = this.getInputValue(block, "OPERAND2", blocks);
         return `(${op1} || ${op2})`;
-      }
-      else if (block.opcode === "operator_not") {
+      } else if (block.opcode === "operator_not") {
         const op = this.getInputValue(block, "OPERAND", blocks);
         return `!(${op})`;
-      }
-      else if (block.opcode === "operator_add") {
+      } else if (block.opcode === "operator_add") {
         const num1 = this.getInputValue(block, "NUM1", blocks);
         const num2 = this.getInputValue(block, "NUM2", blocks);
         return `(${num1} + ${num2})`;
-      }
-      else if (block.opcode === "operator_subtract") {
+      } else if (block.opcode === "operator_subtract") {
         const num1 = this.getInputValue(block, "NUM1", blocks);
         const num2 = this.getInputValue(block, "NUM2", blocks);
         return `(${num1} - ${num2})`;
-      }
-      else if (block.opcode === "operator_multiply") {
+      } else if (block.opcode === "operator_multiply") {
         const num1 = this.getInputValue(block, "NUM1", blocks);
         const num2 = this.getInputValue(block, "NUM2", blocks);
         return `(${num1} * ${num2})`;
-      }
-      else if (block.opcode === "operator_divide") {
+      } else if (block.opcode === "operator_divide") {
         const num1 = this.getInputValue(block, "NUM1", blocks);
         const num2 = this.getInputValue(block, "NUM2", blocks);
         return `(${num1} / ${num2})`;
-      }
-      else if (block.opcode === "operator_random") {
+      } else if (block.opcode === "operator_random") {
         const from = this.getInputValue(block, "FROM", blocks);
         const to = this.getInputValue(block, "TO", blocks);
         return `Random(${to} - ${from}) + ${from}`;
-      }
-      else if (block.opcode === "operator_mod") {
+      } else if (block.opcode === "operator_mod") {
         const num1 = this.getInputValue(block, "NUM1", blocks);
         const num2 = this.getInputValue(block, "NUM2", blocks);
         return `(${num1} % ${num2})`;
-      }
-      else if (block.opcode === "operator_round") {
+      } else if (block.opcode === "operator_round") {
         const num = this.getInputValue(block, "NUM", blocks);
         return `round(${num})`;
-      }
-      else if (block.opcode === "operator_mathop") {
+      } else if (block.opcode === "operator_mathop") {
         const operator = this.getFieldValue(block, "OPERATOR");
         const num = this.getInputValue(block, "NUM", blocks);
-        
+
         const mathOps = {
-          "abs": `abs(${num})`,
-          "floor": `floor(${num})`,
-          "ceiling": `ceil(${num})`,
-          "sqrt": `sqrt(${num})`,
-          "sin": `sin(${num})`,
-          "cos": `cos(${num})`,
-          "tan": `tan(${num})`,
-          "asin": `asin(${num})`,
-          "acos": `acos(${num})`,
-          "atan": `atan(${num})`,
-          "ln": `log(${num})`,
-          "log": `log10(${num})`,
+          abs: `abs(${num})`,
+          floor: `floor(${num})`,
+          ceiling: `ceil(${num})`,
+          sqrt: `sqrt(${num})`,
+          sin: `sin(${num})`,
+          cos: `cos(${num})`,
+          tan: `tan(${num})`,
+          asin: `asin(${num})`,
+          acos: `acos(${num})`,
+          atan: `atan(${num})`,
+          ln: `log(${num})`,
+          log: `log10(${num})`,
           "e ^": `exp(${num})`,
           "10 ^": `pow(10, ${num})`,
         };
-        
+
         return mathOps[operator] || `(${num})`;
       }
 
@@ -818,7 +838,10 @@
       this.logger.log(`Processing block: ${opcode}`);
 
       if (opcode === "motorOn") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const power = this.getInputValue(block, "POWER", blocks);
         this.addLine(`if (${power} > 0) {`);
         this.increaseIndent();
@@ -829,40 +852,57 @@
         this.addLine(`OnRev(OUT_${port}, -${power});`);
         this.decreaseIndent();
         this.addLine(`}`);
-      }
-      else if (opcode === "motorDegrees") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "motorDegrees") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const power = this.getInputValue(block, "POWER", blocks);
         const degrees = this.getInputValue(block, "DEG", blocks);
         this.addLine(`RotateMotor(OUT_${port}, ${power}, ${degrees});`);
-      }
-      else if (opcode === "motorRotations") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "motorRotations") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const power = this.getInputValue(block, "POWER", blocks);
         const rotations = this.getInputValue(block, "ROT", blocks);
-        this.addLine(`RotateMotor(OUT_${port}, ${power}, (${rotations}) * 360);`);
-      }
-      else if (opcode === "motorStop") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
-        const action = this.getInputValue(block, "ACTION", blocks).replace(/"/g, "");
+        this.addLine(
+          `RotateMotor(OUT_${port}, ${power}, (${rotations}) * 360);`,
+        );
+      } else if (opcode === "motorStop") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
+        const action = this.getInputValue(block, "ACTION", blocks).replace(
+          /"/g,
+          "",
+        );
         if (action === "brake") {
           this.addLine(`Off(OUT_${port});`);
         } else {
           this.addLine(`Float(OUT_${port});`);
         }
-      }
-      else if (opcode === "resetMotor") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "resetMotor") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         this.addLine(`ResetRotationCount(OUT_${port});`);
-      }
-      else if (opcode === "setupTouch") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "setupTouch") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.addLine(`SetSensorTouch(IN_${sensorNum});`);
         this.sensorSetup.add(`touch_${port}`);
-      }
-      else if (opcode === "setupLight") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "setupLight") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const led = this.getInputValue(block, "LED", blocks).replace(/"/g, "");
         const sensorNum = port.replace("S", "");
         if (led === "on") {
@@ -871,188 +911,201 @@
           this.addLine(`SetSensorLowspeed(IN_${sensorNum});`);
         }
         this.sensorSetup.add(`light_${port}`);
-      }
-      else if (opcode === "setupSound") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "setupSound") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.addLine(`SetSensorSound(IN_${sensorNum});`);
         this.sensorSetup.add(`sound_${port}`);
-      }
-      else if (opcode === "setupUltrasonic") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+      } else if (opcode === "setupUltrasonic") {
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.addLine(`SetSensorLowspeed(IN_${sensorNum});`);
         this.sensorSetup.add(`ultrasonic_${port}`);
-      }
-      else if (opcode === "playTone") {
+      } else if (opcode === "playTone") {
         const freq = this.getInputValue(block, "FREQ", blocks);
         const ms = this.getInputValue(block, "MS", blocks);
         this.addLine(`PlayTone(${freq}, ${ms});`);
-      }
-      else if (opcode === "playNote") {
-        const note = this.getInputValue(block, "NOTE", blocks).replace(/"/g, "");
+      } else if (opcode === "playNote") {
+        const note = this.getInputValue(block, "NOTE", blocks).replace(
+          /"/g,
+          "",
+        );
         const beats = this.getInputValue(block, "BEATS", blocks);
         const noteFreqs = {
-          "C4": 262, "C#4": 277, "D4": 294, "D#4": 311, "E4": 330, "F4": 349,
-          "F#4": 370, "G4": 392, "G#4": 415, "A4": 440, "A#4": 466, "B4": 494,
-          "C5": 523, "C#5": 554, "D5": 587, "D#5": 622, "E5": 659, "F5": 698,
-          "F#5": 740, "G5": 784, "G#5": 831, "A5": 880, "A#5": 932, "B5": 988,
+          C4: 262,
+          "C#4": 277,
+          D4: 294,
+          "D#4": 311,
+          E4: 330,
+          F4: 349,
+          "F#4": 370,
+          G4: 392,
+          "G#4": 415,
+          A4: 440,
+          "A#4": 466,
+          B4: 494,
+          C5: 523,
+          "C#5": 554,
+          D5: 587,
+          "D#5": 622,
+          E5: 659,
+          F5: 698,
+          "F#5": 740,
+          G5: 784,
+          "G#5": 831,
+          A5: 880,
+          "A#5": 932,
+          B5: 988,
         };
         const freq = noteFreqs[note] || 440;
         this.addLine(`PlayTone(${freq}, (${beats}) * 500);`);
-      }
-      else if (opcode === "clearScreen") {
+      } else if (opcode === "clearScreen") {
         this.addLine(`ClearScreen();`);
-      }
-      else if (opcode === "drawText") {
+      } else if (opcode === "drawText") {
         const text = this.getInputValue(block, "TEXT", blocks);
         const x = this.getInputValue(block, "X", blocks);
         const y = this.getInputValue(block, "Y", blocks);
         this.addLine(`TextOut(${x}, LCD_LINE1 + ${y}, ${text});`);
-      }
-      else if (opcode === "drawPixel") {
+      } else if (opcode === "drawPixel") {
         const x = this.getInputValue(block, "X", blocks);
         const y = this.getInputValue(block, "Y", blocks);
-        const state = this.getInputValue(block, "STATE", blocks).replace(/"/g, "");
+        const state = this.getInputValue(block, "STATE", blocks).replace(
+          /"/g,
+          "",
+        );
         if (state === "on") {
           this.addLine(`PointOut(${x}, ${y});`);
         }
-      }
-      else if (opcode === "drawLine") {
+      } else if (opcode === "drawLine") {
         const x1 = this.getInputValue(block, "X1", blocks);
         const y1 = this.getInputValue(block, "Y1", blocks);
         const x2 = this.getInputValue(block, "X2", blocks);
         const y2 = this.getInputValue(block, "Y2", blocks);
         this.addLine(`LineOut(${x1}, ${y1}, ${x2}, ${y2});`);
-      }
-      else if (opcode === "drawRect") {
+      } else if (opcode === "drawRect") {
         const x = this.getInputValue(block, "X", blocks);
         const y = this.getInputValue(block, "Y", blocks);
         const w = this.getInputValue(block, "W", blocks);
         const h = this.getInputValue(block, "H", blocks);
-        const fill = this.getInputValue(block, "FILL", blocks).replace(/"/g, "");
+        const fill = this.getInputValue(block, "FILL", blocks).replace(
+          /"/g,
+          "",
+        );
         if (fill === "filled") {
           this.addLine(`RectOut(${x}, ${y}, ${w}, ${h}, DRAW_OPT_FILL_SHAPE);`);
         } else {
           this.addLine(`RectOut(${x}, ${y}, ${w}, ${h});`);
         }
-      }
-      else if (opcode === "motion_movesteps") {
+      } else if (opcode === "motion_movesteps") {
         const steps = this.getInputValue(block, "STEPS", blocks);
         this.addLine(`// Move ${steps} steps (using motors B+C)`);
         this.addLine(`OnFwd(OUT_BC, 75);`);
         this.addLine(`Wait((${steps}) * 10);`);
         this.addLine(`Off(OUT_BC);`);
-      }
-      else if (opcode === "motion_turnright") {
+      } else if (opcode === "motion_turnright") {
         const degrees = this.getInputValue(block, "DEGREES", blocks);
         this.addLine(`// Turn right ${degrees} degrees`);
         this.addLine(`OnFwd(OUT_B, 50); OnRev(OUT_C, 50);`);
         this.addLine(`Wait((${degrees}) * 5);`);
         this.addLine(`Off(OUT_BC);`);
-      }
-      else if (opcode === "motion_turnleft") {
+      } else if (opcode === "motion_turnleft") {
         const degrees = this.getInputValue(block, "DEGREES", blocks);
         this.addLine(`// Turn left ${degrees} degrees`);
         this.addLine(`OnFwd(OUT_C, 50); OnRev(OUT_B, 50);`);
         this.addLine(`Wait((${degrees}) * 5);`);
         this.addLine(`Off(OUT_BC);`);
-      }
-      else if (opcode === "control_wait") {
+      } else if (opcode === "control_wait") {
         const duration = this.getInputValue(block, "DURATION", blocks);
         this.addLine(`Wait((${duration}) * 1000);`);
-      }
-      else if (opcode === "control_repeat") {
+      } else if (opcode === "control_repeat") {
         const times = this.getInputValue(block, "TIMES", blocks);
         this.addLine(`repeat(${times}) {`);
         this.increaseIndent();
-        
+
         const substackId = this.getSubstackId(block, "SUBSTACK");
         if (substackId) {
           this.processBlockChain(substackId, blocks);
         }
         this.decreaseIndent();
         this.addLine(`}`);
-      }
-      else if (opcode === "control_forever") {
+      } else if (opcode === "control_forever") {
         this.addLine(`while(true) {`);
         this.increaseIndent();
-        
+
         const substackId = this.getSubstackId(block, "SUBSTACK");
         if (substackId) {
           this.processBlockChain(substackId, blocks);
         }
         this.decreaseIndent();
         this.addLine(`}`);
-      }
-      else if (opcode === "control_if") {
+      } else if (opcode === "control_if") {
         const condition = this.getInputValue(block, "CONDITION", blocks);
         this.addLine(`if (${condition}) {`);
         this.increaseIndent();
-        
+
         const substackId = this.getSubstackId(block, "SUBSTACK");
         if (substackId) {
           this.processBlockChain(substackId, blocks);
         }
         this.decreaseIndent();
         this.addLine(`}`);
-      }
-      else if (opcode === "control_if_else") {
+      } else if (opcode === "control_if_else") {
         const condition = this.getInputValue(block, "CONDITION", blocks);
         this.addLine(`if (${condition}) {`);
         this.increaseIndent();
-        
+
         const substackId = this.getSubstackId(block, "SUBSTACK");
         if (substackId) {
           this.processBlockChain(substackId, blocks);
         }
-        
+
         this.decreaseIndent();
         this.addLine(`} else {`);
         this.increaseIndent();
-        
+
         const substack2Id = this.getSubstackId(block, "SUBSTACK2");
         if (substack2Id) {
           this.processBlockChain(substack2Id, blocks);
         }
         this.decreaseIndent();
         this.addLine(`}`);
-      }
-      else if (opcode === "control_repeat_until") {
+      } else if (opcode === "control_repeat_until") {
         const condition = this.getInputValue(block, "CONDITION", blocks);
         this.addLine(`until (${condition}) {`);
         this.increaseIndent();
-        
+
         const substackId = this.getSubstackId(block, "SUBSTACK");
         if (substackId) {
           this.processBlockChain(substackId, blocks);
         }
         this.decreaseIndent();
         this.addLine(`}`);
-      }
-      else if (opcode === "control_stop") {
+      } else if (opcode === "control_stop") {
         const stopOption = this.getFieldValue(block, "STOP_OPTION") || "all";
         if (stopOption === "all") {
           this.addLine(`Stop(true);`);
         } else {
           this.addLine(`return;`);
         }
-      }
-      else if (opcode === "data_setvariableto") {
+      } else if (opcode === "data_setvariableto") {
         const varName = this.getFieldValue(block, "VARIABLE");
         const value = this.getInputValue(block, "VALUE", blocks);
         const sanitized = this.sanitizeName(varName);
         this.variables.set(varName, sanitized);
         this.addLine(`${sanitized} = ${value};`);
-      }
-      else if (opcode === "data_changevariableby") {
+      } else if (opcode === "data_changevariableby") {
         const varName = this.getFieldValue(block, "VARIABLE");
         const value = this.getInputValue(block, "VALUE", blocks);
         const sanitized = this.sanitizeName(varName);
         this.variables.set(varName, sanitized);
         this.addLine(`${sanitized} += ${value};`);
-      }
-      else if (opcode === "looks_say" || opcode === "looks_sayforsecs") {
+      } else if (opcode === "looks_say" || opcode === "looks_sayforsecs") {
         const message = this.getInputValue(block, "MESSAGE", blocks);
         this.addLine(`TextOut(0, LCD_LINE1, ${message});`);
         if (opcode === "looks_sayforsecs") {
@@ -1100,7 +1153,7 @@
       this.logger.log(`Processing target: ${target.sprite.name}`);
       const blocks = target.blocks;
       const blockArray = blocks._blocks;
-      
+
       for (const blockId in blockArray) {
         const block = blockArray[blockId];
         if (block.opcode === "event_whenflagclicked") {
@@ -1132,11 +1185,11 @@
         this.addLine("// Initialize sensors");
         this.addLine("sub InitSensors() {");
         this.increaseIndent();
-        
+
         for (const sensor of this.sensorSetup) {
           const [type, port] = sensor.split("_");
           const sensorNum = port.replace("S", "");
-          
+
           if (type === "touch") {
             this.addLine(`SetSensorTouch(IN_${sensorNum});`);
           } else if (type === "light") {
@@ -1147,7 +1200,7 @@
             this.addLine(`SetSensorLowspeed(IN_${sensorNum});`);
           }
         }
-        
+
         this.decreaseIndent();
         this.addLine("}");
         this.addLine("");
@@ -1158,55 +1211,55 @@
       this.logger.log("=".repeat(50));
       this.logger.log("Starting NXC Transpilation");
       this.logger.log("=".repeat(50));
-      
+
       this.reset();
-      
+
       try {
         const runtime = Scratch.vm.runtime;
         const targets = runtime.targets;
-        
+
         this.logger.log(`Found ${targets.length} targets`);
-        
+
         const tempCode = this.code;
         this.code = [];
-        
+
         for (const target of targets) {
           this.processTarget(target);
         }
-        
+
         const bodyCode = this.code.join("\n");
-        
+
         this.code = [];
-        
+
         this.generateHeader();
         this.generateVariables();
         this.generateSensorSetup();
-        
+
         this.addLine("task main() {");
         this.increaseIndent();
-        
+
         if (this.sensorSetup.size > 0) {
           this.addLine("InitSensors();");
           this.addLine("");
         }
-        
+
         const bodyLines = bodyCode.split("\n");
         for (const line of bodyLines) {
           this.code.push(line);
         }
-        
+
         this.decreaseIndent();
         this.addLine("}");
-        
+
         const finalCode = this.getCode();
-        
+
         this.logger.success("Transpilation Complete!");
         this.logger.log("=".repeat(50));
         this.logger.log("Generated Code:");
         this.logger.log("=".repeat(50));
         this.logger.log(finalCode);
         this.logger.log("=".repeat(50));
-        
+
         return finalCode;
       } catch (error) {
         this.logger.error("Transpilation failed:", error);
@@ -1227,6 +1280,9 @@
       this._connected = false;
       this._rateLimiter = new RateLimiter(NXT_BT_SEND_RATE_MAX);
 
+      // Data buffer for handling fragmented packets
+      this._dataBuffer = [];
+
       // State
       this.batteryLevel = 0;
       this.motorState = {
@@ -1243,7 +1299,7 @@
 
       this.ultrasonicDistance = { S1: 0, S2: 0, S3: 0, S4: 0 };
       this.screenBuffer = new Uint8Array(DISPLAY_BUFFER_SIZE);
-      
+
       // Request tracking
       this.pendingRequests = new Map();
       this.requestId = 0;
@@ -1266,7 +1322,7 @@
       if (this._bt) {
         this._bt.disconnect();
       }
-      
+
       this._bt = new BT(
         this.runtime,
         this.extensionId,
@@ -1298,6 +1354,7 @@
     reset() {
       logger.log("Resetting NXT peripheral");
       this._connected = false;
+      this._dataBuffer = []; // Clear buffer on reset!
       this.batteryLevel = 0;
       this.motorState = {
         A: { power: 0, tachoCount: 0, position: 0 },
@@ -1322,7 +1379,7 @@
     _onConnect() {
       logger.success("NXT connected via Bluetooth!");
       this._connected = true;
-      
+
       // Get firmware version to confirm connection
       this.getFirmwareVersion().then((version) => {
         logger.success(`NXT Firmware Version: ${version}`);
@@ -1332,15 +1389,48 @@
     _onMessage(params) {
       const message = params.message;
       const data = Base64Util.base64ToUint8Array(message);
-      
-      logger.log(`Received message: ${data.length} bytes`);
-      
-      // Process the telegram
-      if (data.length >= 2) {
-        const length = data[0] | (data[1] << 8);
-        if (data.length >= length + 2) {
-          const telegram = data.slice(2, 2 + length);
-          this._processTelegram(telegram);
+
+      // Buffer the incoming data
+      this._dataBuffer.push(...Array.from(data));
+
+      // Process all complete packets in buffer
+      let len = this._dataBuffer[0] | (this._dataBuffer[1] << 8);
+
+      while (this._dataBuffer.length >= len + 2) {
+        // Remove length header
+        this._dataBuffer.splice(0, 2);
+
+        // Extract complete packet
+        const packet = this._dataBuffer.splice(0, len);
+
+        // Process the packet
+        this._processPacket(new Uint8Array(packet));
+
+        // Check if there's another packet
+        if (this._dataBuffer.length >= 2) {
+          len = this._dataBuffer[0] | (this._dataBuffer[1] << 8);
+        }
+      }
+    }
+
+    _processPacket(telegram) {
+      if (telegram.length === 0) return;
+
+      const messageType = telegram[0];
+      const command = telegram[1];
+
+      logger.log(
+        `Processing packet: type=${messageType.toString(16)}, cmd=${command.toString(16)}, len=${telegram.length}`,
+      );
+
+      if (messageType === NXT_OPCODE.REPLY) {
+        const status = telegram[2];
+
+        // Resolve pending requests
+        for (const [id, resolve] of this.pendingRequests.entries()) {
+          resolve(telegram);
+          this.pendingRequests.delete(id);
+          break;
         }
       }
     }
@@ -1351,11 +1441,13 @@
       const messageType = telegram[0];
       const command = telegram[1];
 
-      logger.log(`Processing telegram: type=${messageType.toString(16)}, cmd=${command.toString(16)}, len=${telegram.length}`);
+      logger.log(
+        `Processing telegram: type=${messageType.toString(16)}, cmd=${command.toString(16)}, len=${telegram.length}`,
+      );
 
       if (messageType === NXT_OPCODE.REPLY) {
         const status = telegram[2];
-        
+
         // Resolve any pending requests
         for (const [id, resolve] of this.pendingRequests.entries()) {
           resolve(telegram);
@@ -1369,7 +1461,12 @@
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-    async sendTelegram(command, payload = [], requireReply = true, isSystemCmd = false) {
+    async sendTelegram(
+      command,
+      payload = [],
+      requireReply = true,
+      isSystemCmd = false,
+    ) {
       if (!this.isConnected()) {
         logger.warn("Cannot send telegram - not connected");
         throw new Error("NXT not connected");
@@ -1385,9 +1482,15 @@
 
       const telegram = [messageType, command, ...payload];
       const length = telegram.length;
-      const packet = new Uint8Array([length & 0xff, (length >> 8) & 0xff, ...telegram]);
+      const packet = new Uint8Array([
+        length & 0xff,
+        (length >> 8) & 0xff,
+        ...telegram,
+      ]);
 
-      logger.log(`Sending telegram: cmd=${command.toString(16)}, len=${length}, reply=${requireReply}`);
+      logger.log(
+        `Sending telegram: cmd=${command.toString(16)}, len=${length}, reply=${requireReply}`,
+      );
 
       // Rate limiting
       if (!this._rateLimiter.okayToSend()) {
@@ -1421,7 +1524,12 @@
     // ==================== FIRMWARE ====================
 
     async getFirmwareVersion() {
-      const reply = await this.sendTelegram(NXT_OPCODE.GET_FIRMWARE_VERSION, [], true, true);
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.GET_FIRMWARE_VERSION,
+        [],
+        true,
+        true,
+      );
       if (reply && reply.length >= 7) {
         const minor = reply[3];
         const major = reply[4];
@@ -1510,13 +1618,60 @@
 
     async getMotorPosition(port) {
       const portNum = PORT[port];
-      const reply = await this.sendTelegram(NXT_OPCODE.GET_OUT_STATE, [portNum], true);
-      if (reply && reply.length >= 25) {
-        const count =
-          reply[21] | (reply[22] << 8) | (reply[23] << 16) | (reply[24] << 24);
-        return count;
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.GET_OUT_STATE,
+        [portNum],
+        true,
+      );
+
+      if (!reply || reply.length < 25) {
+        throw new Error("Invalid GET_OUT_STATE response");
       }
-      return 0;
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `GET_OUT_STATE failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      // Parse all fields like Python does
+      const ret_port = reply[3];
+      const power = reply[4] > 127 ? reply[4] - 256 : reply[4]; // Signed byte
+      const mode = reply[5];
+      const regulation_mode = reply[6];
+      const turn_ratio = reply[7] > 127 ? reply[7] - 256 : reply[7]; // Signed byte
+      const run_state = reply[8];
+      const tacho_limit =
+        reply[9] | (reply[10] << 8) | (reply[11] << 16) | (reply[12] << 24);
+
+      // Signed 32-bit values
+      let tacho_count =
+        reply[13] | (reply[14] << 8) | (reply[15] << 16) | (reply[16] << 24);
+      if (tacho_count > 0x7fffffff) tacho_count = tacho_count - 0x100000000;
+
+      let block_tacho_count =
+        reply[17] | (reply[18] << 8) | (reply[19] << 16) | (reply[20] << 24);
+      if (block_tacho_count > 0x7fffffff)
+        block_tacho_count = block_tacho_count - 0x100000000;
+
+      let rotation_count =
+        reply[21] | (reply[22] << 8) | (reply[23] << 16) | (reply[24] << 24);
+      if (rotation_count > 0x7fffffff)
+        rotation_count = rotation_count - 0x100000000;
+
+      return {
+        port: ret_port,
+        power,
+        mode,
+        regulation_mode,
+        turn_ratio,
+        run_state,
+        tacho_limit,
+        tacho_count,
+        block_tacho_count,
+        rotation_count,
+      };
     }
 
     async resetMotorPosition(port, relative = false) {
@@ -1534,7 +1689,11 @@
     async setupSensor(port, type, mode) {
       logger.log(`Setting up sensor on ${port} (type: ${type}, mode: ${mode})`);
       const portNum = PORT[port];
-      await this.sendTelegram(NXT_OPCODE.SET_IN_MODE, [portNum, type, mode], false);
+      await this.sendTelegram(
+        NXT_OPCODE.SET_IN_MODE,
+        [portNum, type, mode],
+        false,
+      );
       await this.sendTelegram(NXT_OPCODE.RESET_IN_VAL, [portNum], false);
     }
 
@@ -1544,7 +1703,9 @@
     }
 
     async setupLightSensor(port, active = true) {
-      const type = active ? SENSOR_TYPE.LIGHT_ACTIVE : SENSOR_TYPE.LIGHT_INACTIVE;
+      const type = active
+        ? SENSOR_TYPE.LIGHT_ACTIVE
+        : SENSOR_TYPE.LIGHT_INACTIVE;
       await this.setupSensor(port, type, SENSOR_MODE.PCT_FULL_SCALE);
       this.sensorState[port].type = "light";
     }
@@ -1574,18 +1735,59 @@
 
     async getSensorValue(port) {
       const portNum = PORT[port];
-      const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
-      if (reply && reply.length >= 13) {
-        const scaledValue = reply[8] | (reply[9] << 8);
-        this.sensorState[port].value = scaledValue;
-        return scaledValue;
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.GET_IN_VALS,
+        [portNum],
+        true,
+      );
+
+      if (!reply || reply.length < 16) {
+        throw new Error("Invalid GET_IN_VALS response");
       }
-      return 0;
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `GET_IN_VALS failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      const ret_port = reply[3];
+      const valid = reply[4] !== 0;
+      const calibrated = reply[5] !== 0;
+      const sensor_type = reply[6];
+      const sensor_mode = reply[7];
+      const raw_value = reply[8] | (reply[9] << 8);
+      const normalized_value = reply[10] | (reply[11] << 8);
+
+      // Signed 16-bit
+      let scaled_value = reply[12] | (reply[13] << 8);
+      if (scaled_value > 0x7fff) scaled_value = scaled_value - 0x10000;
+
+      let calibrated_value = reply[14] | (reply[15] << 8);
+      if (calibrated_value > 0x7fff)
+        calibrated_value = calibrated_value - 0x10000;
+
+      return {
+        port: ret_port,
+        valid,
+        calibrated,
+        sensor_type,
+        sensor_mode,
+        raw_value,
+        normalized_value,
+        scaled_value,
+        calibrated_value,
+      };
     }
 
     async getRawSensorValue(port) {
       const portNum = PORT[port];
-      const reply = await this.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.GET_IN_VALS,
+        [portNum],
+        true,
+      );
       if (reply && reply.length >= 13) {
         const rawValue = reply[10] | (reply[11] << 8);
         this.sensorState[port].rawValue = rawValue;
@@ -1605,7 +1807,11 @@
 
       await this.sleep(50);
 
-      const reply = await this.sendTelegram(NXT_OPCODE.LS_READ, [portNum], true);
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.LS_READ,
+        [portNum],
+        true,
+      );
 
       if (reply && reply.length >= 4) {
         const bytesRead = reply[3];
@@ -1625,12 +1831,7 @@
       logger.log(`Playing tone: ${freq}Hz for ${ms}ms`);
       await this.sendTelegram(
         NXT_OPCODE.PLAY_TONE,
-        [
-          freq & 0xff,
-          (freq >> 8) & 0xff,
-          ms & 0xff,
-          (ms >> 8) & 0xff,
-        ],
+        [freq & 0xff, (freq >> 8) & 0xff, ms & 0xff, (ms >> 8) & 0xff],
         false,
       );
     }
@@ -1651,57 +1852,50 @@
 
     async readScreenBuffer() {
       logger.log("Reading screen buffer from NXT...");
-      const reply = await this.sendTelegram(
-        NXT_OPCODE.READ_IO_MAP,
-        [
-          MODULE_DISPLAY & 0xff,
-          (MODULE_DISPLAY >> 8) & 0xff,
-          (MODULE_DISPLAY >> 16) & 0xff,
-          (MODULE_DISPLAY >> 24) & 0xff,
-          DISPLAY_OFFSET & 0xff,
-          (DISPLAY_OFFSET >> 8) & 0xff,
-          DISPLAY_BUFFER_SIZE & 0xff,
-          (DISPLAY_BUFFER_SIZE >> 8) & 0xff,
-        ],
-        true,
-        true,
-      );
 
-      if (reply && reply.length >= 6 + DISPLAY_BUFFER_SIZE) {
-        for (let i = 0; i < DISPLAY_BUFFER_SIZE; i++) {
-          this.screenBuffer[i] = reply[6 + i];
-        }
+      this.screenBuffer = new Uint8Array(DISPLAY_BUFFER_SIZE);
+
+      const CHUNK_SIZE = 32; // Read 32 bytes at a time
+      const chunks = Math.ceil(DISPLAY_BUFFER_SIZE / CHUNK_SIZE);
+
+      for (let i = 0; i < chunks; i++) {
+        const offset = DISPLAY_OFFSET + i * CHUNK_SIZE;
+        const size = Math.min(CHUNK_SIZE, DISPLAY_BUFFER_SIZE - i * CHUNK_SIZE);
+
+        const result = await this.read_io_map(MODULE_DISPLAY, offset, size);
+
+        // Copy to screen buffer
+        this.screenBuffer.set(result.data, i * CHUNK_SIZE);
+
+        await this.sleep(20);
       }
+
+      logger.success(`Read ${DISPLAY_BUFFER_SIZE} bytes from display`);
     }
 
     async updateDisplay() {
       logger.log("Updating NXT display...");
-      const chunks = Math.ceil(DISPLAY_BUFFER_SIZE / 59);
+
+      const CHUNK_SIZE = 59; // Max 59 bytes per write
+      const chunks = Math.ceil(DISPLAY_BUFFER_SIZE / CHUNK_SIZE);
 
       for (let i = 0; i < chunks; i++) {
-        const offset = DISPLAY_OFFSET + i * 59;
-        const chunkSize = Math.min(59, DISPLAY_BUFFER_SIZE - i * 59);
-        const chunkData = this.screenBuffer.slice(i * 59, i * 59 + chunkSize);
-
-        await this.sendTelegram(
-          NXT_OPCODE.WRITE_IO_MAP,
-          [
-            MODULE_DISPLAY & 0xff,
-            (MODULE_DISPLAY >> 8) & 0xff,
-            (MODULE_DISPLAY >> 16) & 0xff,
-            (MODULE_DISPLAY >> 24) & 0xff,
-            offset & 0xff,
-            (offset >> 8) & 0xff,
-            chunkSize & 0xff,
-            (chunkSize >> 8) & 0xff,
-            ...chunkData,
-          ],
-          false,
-          true,
+        const offset = DISPLAY_OFFSET + i * CHUNK_SIZE;
+        const chunkSize = Math.min(
+          CHUNK_SIZE,
+          DISPLAY_BUFFER_SIZE - i * CHUNK_SIZE,
         );
+        const chunkData = this.screenBuffer.slice(
+          i * CHUNK_SIZE,
+          i * CHUNK_SIZE + chunkSize,
+        );
+
+        await this.write_io_map(MODULE_DISPLAY, offset, chunkData);
 
         await this.sleep(20);
       }
+
+      logger.success("Display updated");
     }
 
     clearScreenBuffer() {
@@ -1854,7 +2048,7 @@
         case "checkerboard":
           for (let x = 0; x < DISPLAY_WIDTH; x++) {
             for (let y = 0; y < DISPLAY_HEIGHT; y++) {
-              this.setPixel(x, y, ((x + y) % 2) === 0);
+              this.setPixel(x, y, (x + y) % 2 === 0);
             }
           }
           break;
@@ -1862,7 +2056,7 @@
         case "stripes-h":
           for (let y = 0; y < DISPLAY_HEIGHT; y++) {
             for (let x = 0; x < DISPLAY_WIDTH; x++) {
-              this.setPixel(x, y, (y % 4) < 2);
+              this.setPixel(x, y, y % 4 < 2);
             }
           }
           break;
@@ -1870,7 +2064,7 @@
         case "stripes-v":
           for (let x = 0; x < DISPLAY_WIDTH; x++) {
             for (let y = 0; y < DISPLAY_HEIGHT; y++) {
-              this.setPixel(x, y, (x % 4) < 2);
+              this.setPixel(x, y, x % 4 < 2);
             }
           }
           break;
@@ -1878,7 +2072,7 @@
         case "grid":
           for (let x = 0; x < DISPLAY_WIDTH; x++) {
             for (let y = 0; y < DISPLAY_HEIGHT; y++) {
-              this.setPixel(x, y, (x % 10 === 0 || y % 10 === 0));
+              this.setPixel(x, y, x % 10 === 0 || y % 10 === 0);
             }
           }
           break;
@@ -1907,7 +2101,8 @@
           this.setPixel(40, 25, true);
           this.setPixel(60, 25, true);
           for (let x = 35; x <= 65; x++) {
-            const y = 35 + Math.floor(Math.sqrt(225 - (x - 50) * (x - 50)) * 0.3);
+            const y =
+              35 + Math.floor(Math.sqrt(225 - (x - 50) * (x - 50)) * 0.3);
             this.setPixel(x, y, true);
           }
           break;
@@ -1925,16 +2120,18 @@
       if (!this.runtime && typeof Scratch !== "undefined" && Scratch.vm) {
         this.runtime = Scratch.vm.runtime;
       }
-      
+
       this.peripheral = new NXTPeripheral(this.runtime, "legonxt");
       this.transpiler = new NXCTranspiler();
-      
+
       // Code generation state
       this.nxcCode = null;
       this.rxeBase64 = null;
       this.compilerUrl = "https://lego-compiler.vercel.app";
-      
-      logger.success("Extension initialized with Bluetooth and transpilation support");
+
+      logger.success(
+        "Extension initialized with Bluetooth and transpilation support",
+      );
     }
 
     getInfo() {
@@ -1943,7 +2140,8 @@
         name: "LEGO NXT",
         color1: "#FF6B00",
         color2: "#CC5500",
-        blockIconURI: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB4PSI1IiB5PSI1IiB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHJ4PSI0IiBmaWxsPSIjRkY2QjAwIi8+PC9zdmc+",
+        blockIconURI:
+          "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB4PSI1IiB5PSI1IiB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHJ4PSI0IiBmaWxsPSIjRkY2QjAwIi8+PC9zdmc+",
         showStatusButton: true,
         blocks: [
           "🔌 CONNECTION",
@@ -1970,7 +2168,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "motor [PORT] power [POWER]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_PORT", defaultValue: "A" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
               POWER: { type: Scratch.ArgumentType.NUMBER, defaultValue: 75 },
             },
           },
@@ -1979,7 +2181,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "motor [PORT] power [POWER] for [DEGREES]°",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_PORT", defaultValue: "A" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
               POWER: { type: Scratch.ArgumentType.NUMBER, defaultValue: 75 },
               DEGREES: { type: Scratch.ArgumentType.NUMBER, defaultValue: 360 },
             },
@@ -1989,7 +2195,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "motor [PORT] power [POWER] for [ROTATIONS] rotations",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_PORT", defaultValue: "A" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
               POWER: { type: Scratch.ArgumentType.NUMBER, defaultValue: 75 },
               ROTATIONS: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
             },
@@ -1999,8 +2209,16 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "stop motor [PORT] [ACTION]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_PORT", defaultValue: "A" },
-              ACTION: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_STOP", defaultValue: "brake" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+              ACTION: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_STOP",
+                defaultValue: "brake",
+              },
             },
           },
           {
@@ -2008,7 +2226,11 @@
             blockType: Scratch.BlockType.REPORTER,
             text: "motor [PORT] position",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_PORT", defaultValue: "A" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
             },
           },
           {
@@ -2016,7 +2238,122 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "reset motor [PORT] position",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "MOTOR_PORT", defaultValue: "A" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+
+          "---",
+          "⚙️ ADVANCED MOTORS",
+          {
+            opcode: "getMotorPower",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] power",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorMode",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] mode",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorRegulationMode",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] regulation mode",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorTurnRatio",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] turn ratio",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorRunState",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] run state",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorTachoLimit",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] tacho limit",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorTachoCount",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] tacho count",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorBlockTachoCount",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] block tacho count",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
+            },
+          },
+          {
+            opcode: "getMotorRotationCount",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "motor [PORT] rotation count",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "MOTOR_PORT",
+                defaultValue: "A",
+              },
             },
           },
 
@@ -2027,7 +2364,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "setup touch sensor on [PORT]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
           {
@@ -2035,7 +2376,11 @@
             blockType: Scratch.BlockType.BOOLEAN,
             text: "touch sensor [PORT] pressed?",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
 
@@ -2046,8 +2391,16 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "setup light sensor on [PORT] LED [STATE]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
-              STATE: { type: Scratch.ArgumentType.STRING, menu: "LED_STATE", defaultValue: "on" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+              STATE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "LED_STATE",
+                defaultValue: "on",
+              },
             },
           },
           {
@@ -2055,7 +2408,11 @@
             blockType: Scratch.BlockType.REPORTER,
             text: "light level on [PORT]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
 
@@ -2066,8 +2423,16 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "setup color sensor on [PORT] mode [MODE]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
-              MODE: { type: Scratch.ArgumentType.STRING, menu: "COLOR_MODE", defaultValue: "all colors" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+              MODE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "COLOR_MODE",
+                defaultValue: "all colors",
+              },
             },
           },
           {
@@ -2075,7 +2440,11 @@
             blockType: Scratch.BlockType.REPORTER,
             text: "color detected on [PORT]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
 
@@ -2086,8 +2455,16 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "setup sound sensor on [PORT] mode [MODE]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
-              MODE: { type: Scratch.ArgumentType.STRING, menu: "SOUND_MODE", defaultValue: "dBA" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+              MODE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SOUND_MODE",
+                defaultValue: "dBA",
+              },
             },
           },
           {
@@ -2095,7 +2472,11 @@
             blockType: Scratch.BlockType.REPORTER,
             text: "sound level on [PORT]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
 
@@ -2106,7 +2487,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "setup ultrasonic sensor on [PORT]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
           {
@@ -2114,7 +2499,122 @@
             blockType: Scratch.BlockType.REPORTER,
             text: "distance on [PORT] (cm)",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+
+          "---",
+          "🔬 ADVANCED SENSORS",
+          {
+            opcode: "getSensorPort",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] port number",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorValid",
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: "sensor [PORT] valid?",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorCalibrated",
+            blockType: Scratch.BlockType.BOOLEAN,
+            text: "sensor [PORT] calibrated?",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorType",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] type",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorMode",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] mode",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorRawValue",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] raw value",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorNormalizedValue",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] normalized value",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorScaledValue",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] scaled value",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+          {
+            opcode: "getSensorCalibratedValue",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "sensor [PORT] calibrated value",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
 
@@ -2134,7 +2634,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "play note [NOTE] for [BEATS] beats",
             arguments: {
-              NOTE: { type: Scratch.ArgumentType.STRING, menu: "NOTE", defaultValue: "C4" },
+              NOTE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "NOTE",
+                defaultValue: "C4",
+              },
               BEATS: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
             },
           },
@@ -2161,7 +2665,10 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "draw text [TEXT] at x:[X] y:[Y]",
             arguments: {
-              TEXT: { type: Scratch.ArgumentType.STRING, defaultValue: "HELLO" },
+              TEXT: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "HELLO",
+              },
               X: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
               Y: { type: Scratch.ArgumentType.NUMBER, defaultValue: 0 },
             },
@@ -2173,7 +2680,11 @@
             arguments: {
               X: { type: Scratch.ArgumentType.NUMBER, defaultValue: 50 },
               Y: { type: Scratch.ArgumentType.NUMBER, defaultValue: 32 },
-              STATE: { type: Scratch.ArgumentType.STRING, menu: "PIXEL_STATE", defaultValue: "on" },
+              STATE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "PIXEL_STATE",
+                defaultValue: "on",
+              },
             },
           },
           {
@@ -2196,7 +2707,11 @@
               Y: { type: Scratch.ArgumentType.NUMBER, defaultValue: 16 },
               W: { type: Scratch.ArgumentType.NUMBER, defaultValue: 50 },
               H: { type: Scratch.ArgumentType.NUMBER, defaultValue: 32 },
-              FILL: { type: Scratch.ArgumentType.STRING, menu: "RECT_FILL", defaultValue: "outline" },
+              FILL: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "RECT_FILL",
+                defaultValue: "outline",
+              },
             },
           },
           {
@@ -2207,7 +2722,11 @@
               X: { type: Scratch.ArgumentType.NUMBER, defaultValue: 50 },
               Y: { type: Scratch.ArgumentType.NUMBER, defaultValue: 32 },
               R: { type: Scratch.ArgumentType.NUMBER, defaultValue: 20 },
-              FILL: { type: Scratch.ArgumentType.STRING, menu: "RECT_FILL", defaultValue: "outline" },
+              FILL: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "RECT_FILL",
+                defaultValue: "outline",
+              },
             },
           },
           {
@@ -2215,7 +2734,11 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "draw pattern [PATTERN]",
             arguments: {
-              PATTERN: { type: Scratch.ArgumentType.STRING, menu: "PATTERN", defaultValue: "checkerboard" },
+              PATTERN: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "PATTERN",
+                defaultValue: "checkerboard",
+              },
             },
           },
 
@@ -2231,7 +2754,11 @@
             blockType: Scratch.BlockType.REPORTER,
             text: "raw value of sensor [PORT]",
             arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "SENSOR_PORT", defaultValue: "S1" },
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
             },
           },
 
@@ -2267,10 +2794,105 @@
             blockType: Scratch.BlockType.COMMAND,
             text: "🚀 transpile → compile → upload",
           },
+
+          "---",
+          "📱 DEVICE INFO",
+          {
+            opcode: "getDeviceName",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "NXT name",
+          },
+          {
+            opcode: "getBluetoothAddress",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "Bluetooth address",
+          },
+          {
+            opcode: "getFreeFlash",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "free flash memory",
+          },
+          {
+            opcode: "getSignalStrength",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "Bluetooth signal strength",
+          },
+
+          "---",
+          "📬 MAILBOX (MESSAGES)",
+          {
+            opcode: "sendMessage",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "send message [MSG] to mailbox [BOX]",
+            arguments: {
+              MSG: { type: Scratch.ArgumentType.STRING, defaultValue: "Hello" },
+              BOX: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
+            },
+          },
+          {
+            opcode: "receiveMessage",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "read message from mailbox [BOX] [REMOVE]",
+            arguments: {
+              BOX: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
+              REMOVE: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "REMOVE_MSG",
+                defaultValue: "and remove",
+              },
+            },
+          },
+
+          "---",
+          "🔧 LOW-LEVEL I2C",
+          {
+            opcode: "getLowSpeedStatus",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "I2C bytes ready on [PORT]",
+            arguments: {
+              PORT: {
+                type: Scratch.ArgumentType.STRING,
+                menu: "SENSOR_PORT",
+                defaultValue: "S1",
+              },
+            },
+          },
+
+          "---",
+          "🎮 PROGRAM CONTROL",
+          {
+            opcode: "startProgram",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "start program [FILENAME] on NXT",
+            arguments: {
+              FILENAME: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: "program.rxe",
+              },
+            },
+          },
+          {
+            opcode: "stopProgram",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "stop running program on NXT",
+          },
+          {
+            opcode: "keepAlive",
+            blockType: Scratch.BlockType.COMMAND,
+            text: "keep NXT awake",
+          },
+          {
+            opcode: "getCurrentProgram",
+            blockType: Scratch.BlockType.REPORTER,
+            text: "current running program",
+          },
         ],
         menus: {
           MOTOR_PORT: { acceptReporters: true, items: ["A", "B", "C"] },
-          SENSOR_PORT: { acceptReporters: true, items: ["S1", "S2", "S3", "S4"] },
+          SENSOR_PORT: {
+            acceptReporters: true,
+            items: ["S1", "S2", "S3", "S4"],
+          },
           SENSOR_TYPE_TOUCH: { acceptReporters: false, items: ["NXT", "EV3"] },
           COLOR_MODE: {
             acceptReporters: false,
@@ -2281,6 +2903,10 @@
           SOUND_MODE: { acceptReporters: false, items: ["dBA", "dB"] },
           PIXEL_STATE: { acceptReporters: false, items: ["on", "off"] },
           RECT_FILL: { acceptReporters: false, items: ["outline", "filled"] },
+          REMOVE_MSG: {
+            acceptReporters: false,
+            items: ["and remove", "keep in mailbox"],
+          },
           PATTERN: {
             acceptReporters: false,
             items: [
@@ -2296,8 +2922,30 @@
           NOTE: {
             acceptReporters: false,
             items: [
-              "C4", "C#4", "D4", "D#4", "E4", "F4", "F#4", "G4", "G#4", "A4", "A#4", "B4",
-              "C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5", "G#5", "A5", "A#5", "B5",
+              "C4",
+              "C#4",
+              "D4",
+              "D#4",
+              "E4",
+              "F4",
+              "F#4",
+              "G4",
+              "G#4",
+              "A4",
+              "A#4",
+              "B4",
+              "C5",
+              "C#5",
+              "D5",
+              "D#5",
+              "E5",
+              "F5",
+              "F#5",
+              "G5",
+              "G#5",
+              "A5",
+              "A#5",
+              "B5",
             ],
           },
         },
@@ -2313,6 +2961,341 @@
     }
     isConnected() {
       return this.peripheral.isConnected();
+    }
+
+    // ==================== DEVICE INFO ====================
+
+    async getDeviceName() {
+      try {
+        const info = await this.peripheral.get_device_info();
+        return info.name;
+      } catch (error) {
+        logger.error("Failed to get device name:", error);
+        return "Error";
+      }
+    }
+
+    async getBluetoothAddress() {
+      try {
+        const info = await this.peripheral.get_device_info();
+        return info.address;
+      } catch (error) {
+        logger.error("Failed to get Bluetooth address:", error);
+        return "Error";
+      }
+    }
+
+    async getFreeFlash() {
+      try {
+        const info = await this.peripheral.get_device_info();
+        return info.user_flash;
+      } catch (error) {
+        logger.error("Failed to get free flash:", error);
+        return 0;
+      }
+    }
+
+    async getSignalStrength() {
+      try {
+        const info = await this.peripheral.get_device_info();
+        // Return average of all 4 signal strengths
+        const avg = info.signal_strengths.reduce((a, b) => a + b, 0) / 4;
+        return Math.round(avg);
+      } catch (error) {
+        logger.error("Failed to get signal strength:", error);
+        return 0;
+      }
+    }
+
+    // ==================== MAILBOX MESSAGES ====================
+
+    async sendMessage(args) {
+      try {
+        const mailbox = Cast.toNumber(args.BOX);
+        const message = Cast.toString(args.MSG);
+        await this.peripheral.message_write(mailbox, message);
+        logger.success(`Message sent to mailbox ${mailbox}`);
+      } catch (error) {
+        logger.error("Failed to send message:", error);
+      }
+    }
+
+    async receiveMessage(args) {
+      try {
+        const mailbox = Cast.toNumber(args.BOX);
+        const remove = args.REMOVE === "and remove";
+        const result = await this.peripheral.message_read(mailbox, 0, remove);
+
+        // Convert bytes to string
+        const decoder = new TextDecoder();
+        const message = decoder.decode(result.message);
+
+        logger.log(`Received message from mailbox ${mailbox}: "${message}"`);
+        return message;
+      } catch (error) {
+        logger.error("Failed to receive message:", error);
+        return "";
+      }
+    }
+
+    // ==================== PROGRAM CONTROL ====================
+
+    async startProgram(args) {
+      try {
+        const filename = Cast.toString(args.FILENAME);
+        await this.peripheral.start_program(filename);
+        logger.success(`Started program: ${filename}`);
+      } catch (error) {
+        logger.error("Failed to start program:", error);
+        alert(`❌ Failed to start program:\n\n${error.message}`);
+      }
+    }
+
+    async stopProgram() {
+      try {
+        await this.peripheral.stop_program();
+        logger.success("Program stopped");
+      } catch (error) {
+        logger.error("Failed to stop program:", error);
+        alert(`❌ Failed to stop program:\n\n${error.message}`);
+      }
+    }
+
+    async keepAlive() {
+      try {
+        const sleepTime = await this.peripheral.keep_alive();
+        logger.log(`Keep alive successful, sleep time: ${sleepTime}ms`);
+      } catch (error) {
+        logger.error("Keep alive failed:", error);
+      }
+    }
+
+    async getCurrentProgram() {
+      try {
+        const reply = await this.peripheral.sendTelegram(
+          NXT_OPCODE.GET_CURR_PROGRAM,
+          [],
+          true,
+        );
+
+        if (!reply || reply.length < 3) {
+          throw new Error("Invalid response");
+        }
+
+        const status = reply[2];
+        if (status !== 0x00) {
+          throw new Error(NXT_ERROR[status] || "Unknown error");
+        }
+
+        // Parse filename (20 bytes, null-terminated)
+        let filename = "";
+        for (let i = 0; i < 20; i++) {
+          const char = reply[3 + i];
+          if (char === 0) break;
+          filename += String.fromCharCode(char);
+        }
+
+        return filename || "none";
+      } catch (error) {
+        logger.error("Failed to get current program:", error);
+        return "none";
+      }
+    }
+
+    // ==================== ADVANCED SENSORS ====================
+
+    async getSensorPort(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.port;
+      } catch (error) {
+        logger.error("Failed to get sensor port:", error);
+        return 0;
+      }
+    }
+
+    async getSensorValid(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.valid;
+      } catch (error) {
+        logger.error("Failed to get sensor valid:", error);
+        return false;
+      }
+    }
+
+    async getSensorCalibrated(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.calibrated;
+      } catch (error) {
+        logger.error("Failed to get sensor calibrated:", error);
+        return false;
+      }
+    }
+
+    async getSensorType(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.sensor_type;
+      } catch (error) {
+        logger.error("Failed to get sensor type:", error);
+        return 0;
+      }
+    }
+
+    async getSensorMode(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.sensor_mode;
+      } catch (error) {
+        logger.error("Failed to get sensor mode:", error);
+        return 0;
+      }
+    }
+
+    async getSensorRawValue(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.raw_value;
+      } catch (error) {
+        logger.error("Failed to get sensor raw value:", error);
+        return 0;
+      }
+    }
+
+    async getSensorNormalizedValue(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.normalized_value;
+      } catch (error) {
+        logger.error("Failed to get sensor normalized value:", error);
+        return 0;
+      }
+    }
+
+    async getSensorScaledValue(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.scaled_value;
+      } catch (error) {
+        logger.error("Failed to get sensor scaled value:", error);
+        return 0;
+      }
+    }
+
+    async getSensorCalibratedValue(args) {
+      try {
+        const data = await this.peripheral.getSensorValue(args.PORT);
+        return data.calibrated_value;
+      } catch (error) {
+        logger.error("Failed to get sensor calibrated value:", error);
+        return 0;
+      }
+    }
+
+    // ==================== ADVANCED MOTORS ====================
+
+    async getMotorPower(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.power;
+      } catch (error) {
+        logger.error("Failed to get motor power:", error);
+        return 0;
+      }
+    }
+
+    async getMotorMode(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.mode;
+      } catch (error) {
+        logger.error("Failed to get motor mode:", error);
+        return 0;
+      }
+    }
+
+    async getMotorRegulationMode(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.regulation_mode;
+      } catch (error) {
+        logger.error("Failed to get motor regulation mode:", error);
+        return 0;
+      }
+    }
+
+    async getMotorTurnRatio(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.turn_ratio;
+      } catch (error) {
+        logger.error("Failed to get motor turn ratio:", error);
+        return 0;
+      }
+    }
+
+    async getMotorRunState(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.run_state;
+      } catch (error) {
+        logger.error("Failed to get motor run state:", error);
+        return 0;
+      }
+    }
+
+    async getMotorTachoLimit(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.tacho_limit;
+      } catch (error) {
+        logger.error("Failed to get motor tacho limit:", error);
+        return 0;
+      }
+    }
+
+    async getMotorTachoCount(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.tacho_count;
+      } catch (error) {
+        logger.error("Failed to get motor tacho count:", error);
+        return 0;
+      }
+    }
+
+    async getMotorBlockTachoCount(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.block_tacho_count;
+      } catch (error) {
+        logger.error("Failed to get motor block tacho count:", error);
+        return 0;
+      }
+    }
+
+    async getMotorRotationCount(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+        return data.rotation_count;
+      } catch (error) {
+        logger.error("Failed to get motor rotation count:", error);
+        return 0;
+      }
+    }
+
+    // ==================== LOW-LEVEL I2C ====================
+
+    async getLowSpeedStatus(args) {
+      try {
+        const result = await this.peripheral.ls_get_status(args.PORT);
+        return result.bytes_ready;
+      } catch (error) {
+        logger.error("Failed to get low-speed status:", error);
+        return 0;
+      }
     }
 
     // ==================== MOTORS ====================
@@ -2335,8 +3318,18 @@
       const brake = args.ACTION === "brake";
       return this.peripheral.motorStop(args.PORT, brake);
     }
-    getMotorPosition(args) {
-      return this.peripheral.getMotorPosition(args.PORT);
+    async getMotorPosition(args) {
+      try {
+        const data = await this.peripheral.getMotorPosition(args.PORT);
+
+        // Return rotations (rotation_count) for the simple block
+        return data.rotation_count;
+
+        // return data.tacho_count; // Return just the position for simplicity
+      } catch (error) {
+        logger.error("Failed to get motor position:", error);
+        return 0;
+      }
     }
     resetMotorPosition(args) {
       return this.peripheral.resetMotorPosition(args.PORT, false);
@@ -2369,10 +3362,22 @@
     }
     async getColor(args) {
       const portNum = PORT[args.PORT];
-      const reply = await this.peripheral.sendTelegram(NXT_OPCODE.GET_IN_VALS, [portNum], true);
+      const reply = await this.peripheral.sendTelegram(
+        NXT_OPCODE.GET_IN_VALS,
+        [portNum],
+        true,
+      );
       if (reply && reply.length >= 11) {
         const colorIdx = reply[9];
-        const colors = ["none", "black", "blue", "green", "yellow", "red", "white"];
+        const colors = [
+          "none",
+          "black",
+          "blue",
+          "green",
+          "yellow",
+          "red",
+          "white",
+        ];
         return colors[colorIdx] || "none";
       }
       return "none";
@@ -2399,10 +3404,30 @@
     }
     playNote(args) {
       const noteFreqs = {
-        C4: 262, "C#4": 277, D4: 294, "D#4": 311, E4: 330, F4: 349,
-        "F#4": 370, G4: 392, "G#4": 415, A4: 440, "A#4": 466, B4: 494,
-        C5: 523, "C#5": 554, D5: 587, "D#5": 622, E5: 659, F5: 698,
-        "F#5": 740, G5: 784, "G#5": 831, A5: 880, "A#5": 932, B5: 988,
+        C4: 262,
+        "C#4": 277,
+        D4: 294,
+        "D#4": 311,
+        E4: 330,
+        F4: 349,
+        "F#4": 370,
+        G4: 392,
+        "G#4": 415,
+        A4: 440,
+        "A#4": 466,
+        B4: 494,
+        C5: 523,
+        "C#5": 554,
+        D5: 587,
+        "D#5": 622,
+        E5: 659,
+        F5: 698,
+        "F#5": 740,
+        G5: 784,
+        "G#5": 831,
+        A5: 880,
+        "A#5": 932,
+        B5: 988,
       };
       const freq = noteFreqs[args.NOTE] || 440;
       const beats = Cast.toNumber(args.BEATS);
@@ -2425,7 +3450,11 @@
     }
     async drawPixel(args) {
       const on = args.STATE === "on";
-      this.peripheral.setPixel(Cast.toNumber(args.X), Cast.toNumber(args.Y), on);
+      this.peripheral.setPixel(
+        Cast.toNumber(args.X),
+        Cast.toNumber(args.Y),
+        on,
+      );
       await this.peripheral.updateDisplay();
     }
     drawLine(args) {
@@ -2453,28 +3482,34 @@
     }
 
     // ==================== TRANSPILATION (keep from previous version) ====================
-    
+
     transpileProject() {
       logger.log("=".repeat(60));
       logger.log("TRANSPILE PROJECT TO NXC");
       logger.log("=".repeat(60));
-      
+
       try {
         this.nxcCode = this.transpiler.transpileProject();
         logger.success("✅ Project successfully transpiled to NXC!");
-        logger.log(`Generated ${this.nxcCode.split('\n').length} lines of code`);
+        logger.log(
+          `Generated ${this.nxcCode.split("\n").length} lines of code`,
+        );
         alert("✅ Project transpiled to NXC!\n\nCheck console for details.");
       } catch (error) {
         logger.error("Transpilation failed:", error);
-        alert(`❌ Transpilation failed:\n\n${error.message}\n\nCheck console for details.`);
+        alert(
+          `❌ Transpilation failed:\n\n${error.message}\n\nCheck console for details.`,
+        );
       }
     }
 
     showNXCCode() {
       logger.log("Showing NXC code...");
-      
+
       if (!this.nxcCode) {
-        alert("⚠️ Generate NXC code first using 'transpile project to NXC' block!");
+        alert(
+          "⚠️ Generate NXC code first using 'transpile project to NXC' block!",
+        );
         return;
       }
 
@@ -2498,11 +3533,13 @@
 
       const title = document.createElement("h2");
       title.textContent = "📝 Generated NXC Code";
-      title.style.cssText = "color: #FF6B00; margin: 0 0 15px 0; font-size: 24px;";
+      title.style.cssText =
+        "color: #FF6B00; margin: 0 0 15px 0; font-size: 24px;";
 
       const stats = document.createElement("div");
-      stats.textContent = `Lines: ${this.nxcCode.split('\n').length} | Characters: ${this.nxcCode.length}`;
-      stats.style.cssText = "color: #666; font-size: 14px; margin-bottom: 10px;";
+      stats.textContent = `Lines: ${this.nxcCode.split("\n").length} | Characters: ${this.nxcCode.length}`;
+      stats.style.cssText =
+        "color: #666; font-size: 14px; margin-bottom: 10px;";
 
       const pre = document.createElement("pre");
       pre.style.cssText = `
@@ -2521,7 +3558,8 @@
       pre.textContent = this.nxcCode;
 
       const buttonContainer = document.createElement("div");
-      buttonContainer.style.cssText = "margin-top: 15px; display: flex; gap: 10px;";
+      buttonContainer.style.cssText =
+        "margin-top: 15px; display: flex; gap: 10px;";
 
       const copyBtn = document.createElement("button");
       copyBtn.textContent = "📋 Copy to Clipboard";
@@ -2538,7 +3576,7 @@
       copyBtn.onclick = () => {
         navigator.clipboard.writeText(this.nxcCode);
         copyBtn.textContent = "✅ Copied!";
-        setTimeout(() => copyBtn.textContent = "📋 Copy to Clipboard", 2000);
+        setTimeout(() => (copyBtn.textContent = "📋 Copy to Clipboard"), 2000);
       };
 
       const closeBtn = document.createElement("button");
@@ -2563,15 +3601,17 @@
       modal.appendChild(pre);
       modal.appendChild(buttonContainer);
       document.body.appendChild(modal);
-      
+
       logger.success("Code viewer opened");
     }
 
     downloadNXC() {
       logger.log("Downloading NXC file...");
-      
+
       if (!this.nxcCode) {
-        alert("⚠️ Generate NXC code first using 'transpile project to NXC' block!");
+        alert(
+          "⚠️ Generate NXC code first using 'transpile project to NXC' block!",
+        );
         return;
       }
 
@@ -2583,7 +3623,7 @@
         a.download = "nxt_program.nxc";
         a.click();
         URL.revokeObjectURL(url);
-        
+
         logger.success("✅ Downloaded: nxt_program.nxc");
         alert("✅ Downloaded: nxt_program.nxc");
       } catch (error) {
@@ -2596,26 +3636,30 @@
       logger.log("=".repeat(60));
       logger.log("COMPILE NXC TO RXE BYTECODE");
       logger.log("=".repeat(60));
-      
+
       if (!this.nxcCode) {
-        alert("⚠️ Generate NXC code first using 'transpile project to NXC' block!");
+        alert(
+          "⚠️ Generate NXC code first using 'transpile project to NXC' block!",
+        );
         return;
       }
 
       try {
         logger.log(`Sending request to: ${this.compilerUrl}/compile`);
         logger.log(`Code length: ${this.nxcCode.length} characters`);
-        
+
         const response = await fetch(`${this.compilerUrl}/compile`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            compiler: "nxc", 
-            code: this.nxcCode 
+          body: JSON.stringify({
+            compiler: "nxc",
+            code: this.nxcCode,
           }),
         });
 
-        logger.log(`Response status: ${response.status} ${response.statusText}`);
+        logger.log(
+          `Response status: ${response.status} ${response.statusText}`,
+        );
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -2627,11 +3671,11 @@
 
         if (result.success) {
           this.rxeBase64 = result.base64;
-          
+
           const binaryString = atob(this.rxeBase64);
           logger.success(`✅ Compilation successful!`);
           logger.log(`RXE file size: ${binaryString.length} bytes`);
-          
+
           let message = "✅ Compilation successful!";
           if (result.message) {
             logger.log("Compiler output:", result.message);
@@ -2643,7 +3687,9 @@
         }
       } catch (error) {
         logger.error("Compilation failed:", error);
-        alert(`❌ Compilation failed:\n\n${error.message}\n\nCheck console for details.`);
+        alert(
+          `❌ Compilation failed:\n\n${error.message}\n\nCheck console for details.`,
+        );
       }
     }
 
@@ -2651,19 +3697,19 @@
       logger.log("=".repeat(60));
       logger.log("UPLOAD RXE TO NXT");
       logger.log("=".repeat(60));
-      
+
       if (!this.rxeBase64) {
-        alert("⚠️ Compile to .rxe first using 'compile NXC to .rxe' block!");
+        alert("⚠️ Compile to .rxe first!");
         return;
       }
 
-      if (!this.peripheral.isConnected()) {
-        alert("⚠️ Connect to NXT first using 'connect to NXT' block!");
+      if (!this.isConnected()) {
+        alert("⚠️ Connect to NXT first!");
         return;
       }
 
       try {
-        logger.log("Decoding base64 RXE data...");
+        logger.log("Decoding RXE data...");
         const binaryString = atob(this.rxeBase64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -2673,12 +3719,38 @@
         logger.log(`File size: ${bytes.length} bytes`);
 
         const filename = "program.rxe";
+
+        // 🔥 STEP 1: Try to delete existing file (optional but recommended)
+        try {
+          logger.log("Attempting to delete existing file...");
+          const filenameBytes = new Array(20).fill(0);
+          for (let i = 0; i < Math.min(filename.length, 19); i++) {
+            filenameBytes[i] = filename.charCodeAt(i);
+          }
+
+          const deleteReply = await this.sendTelegram(
+            NXT_OPCODE.DELETE,
+            filenameBytes,
+            true,
+            true,
+          );
+
+          if (deleteReply && deleteReply[2] === 0x00) {
+            logger.log("✓ Existing file deleted");
+          } else {
+            logger.log("No existing file to delete");
+          }
+        } catch (e) {
+          logger.log("No existing file or delete failed (continuing anyway)");
+        }
+
+        // 🔥 STEP 2: Open file for writing
+        logger.log(`Opening "${filename}" for writing...`);
         const filenameBytes = new Array(20).fill(0);
         for (let i = 0; i < Math.min(filename.length, 19); i++) {
           filenameBytes[i] = filename.charCodeAt(i);
         }
 
-        logger.log(`Opening file "${filename}" for writing...`);
         const openCmd = [
           ...filenameBytes,
           bytes.length & 0xff,
@@ -2687,71 +3759,413 @@
           (bytes.length >> 24) & 0xff,
         ];
 
-        const openReply = await this.peripheral.sendTelegram(
+        const openReply = await this.sendTelegram(
           NXT_OPCODE.OPEN_WRITE,
           openCmd,
           true,
-          true
+          true,
         );
 
-        if (!openReply || openReply[2] !== 0x00) {
-          const errorCode = openReply ? openReply[2] : 0xff;
-          throw new Error(`Failed to open file: ${NXT_ERROR[errorCode] || 'Unknown error'}`);
+        // 🔥 Check status
+        if (!openReply || openReply.length < 4) {
+          throw new Error("Invalid OPEN_WRITE response");
+        }
+
+        const openStatus = openReply[2];
+        if (openStatus !== 0x00) {
+          const errorMsg =
+            NXT_ERROR[openStatus] ||
+            `Unknown error (0x${openStatus.toString(16)})`;
+          throw new Error(`Failed to open file: ${errorMsg}`);
         }
 
         const handle = openReply[3];
-        logger.log(`File opened with handle: ${handle}`);
+        logger.log(`✓ File opened with handle: ${handle}`);
 
-        const chunkSize = 32;
-        const totalChunks = Math.ceil(bytes.length / chunkSize);
-        logger.log(`Uploading in ${totalChunks} chunks of ${chunkSize} bytes...`);
+        // 🔥 STEP 3: Write data in 32-byte chunks (NXT protocol limit)
+        const CHUNK_SIZE = 32; // ← Fixed size!
+        const totalChunks = Math.ceil(bytes.length / CHUNK_SIZE);
+        logger.log(`Writing ${totalChunks} chunks of ${CHUNK_SIZE} bytes...`);
 
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.slice(i, Math.min(i + chunkSize, bytes.length));
+        for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+          const chunk = bytes.slice(i, Math.min(i + CHUNK_SIZE, bytes.length));
           const writeCmd = [handle, ...Array.from(chunk)];
-          
-          const writeReply = await this.peripheral.sendTelegram(
+
+          const writeReply = await this.sendTelegram(
             NXT_OPCODE.WRITE,
             writeCmd,
             true,
-            true
+            true,
           );
 
-          if (!writeReply || writeReply[2] !== 0x00) {
-            throw new Error(`Write failed at byte ${i}`);
+          if (!writeReply || writeReply.length < 5) {
+            throw new Error(`Write failed at byte ${i}: invalid response`);
           }
 
-          await this.peripheral.sleep(20);
-          
-          if (i % 320 === 0) {
+          const writeStatus = writeReply[2];
+          if (writeStatus !== 0x00) {
+            const errorMsg =
+              NXT_ERROR[writeStatus] ||
+              `Unknown error (0x${writeStatus.toString(16)})`;
+            throw new Error(`Write failed at byte ${i}: ${errorMsg}`);
+          }
+
+          // Check bytes written
+          const handle_ret = writeReply[3];
+          const bytes_written = writeReply[4] | (writeReply[5] << 8);
+
+          if (bytes_written !== chunk.length) {
+            throw new Error(
+              `Write incomplete at byte ${i}: wrote ${bytes_written}/${chunk.length} bytes`,
+            );
+          }
+
+          await this.sleep(20);
+
+          if (i % (CHUNK_SIZE * 10) === 0) {
             const progress = Math.round((i / bytes.length) * 100);
             logger.log(`Upload progress: ${progress}%`);
           }
         }
 
+        logger.log("✓ All chunks written");
+
+        // 🔥 STEP 4: Close file
         logger.log("Closing file...");
-        await this.peripheral.sendTelegram(NXT_OPCODE.CLOSE, [handle], true, true);
+        const closeReply = await this.sendTelegram(
+          NXT_OPCODE.CLOSE,
+          [handle],
+          true,
+          true,
+        );
+
+        // 🔥 Check close status
+        if (!closeReply || closeReply.length < 3) {
+          throw new Error("Invalid CLOSE response");
+        }
+
+        const closeStatus = closeReply[2];
+        if (closeStatus !== 0x00) {
+          const errorMsg =
+            NXT_ERROR[closeStatus] ||
+            `Unknown error (0x${closeStatus.toString(16)})`;
+          throw new Error(`Failed to close file: ${errorMsg}`);
+        }
 
         logger.success("✅ Upload complete!");
-        alert(`✅ Program uploaded to NXT!\n\nFile: ${filename}\nSize: ${bytes.length} bytes\n\nYou can now run "${filename}" from the NXT menu.`);
+        logger.log("=".repeat(60));
+
+        alert(
+          `✅ Program uploaded successfully!\n\n` +
+            `File: ${filename}\n` +
+            `Size: ${bytes.length} bytes\n` +
+            `Chunks: ${totalChunks}\n\n` +
+            `Run "${filename}" from the NXT menu.`,
+        );
       } catch (error) {
         logger.error("Upload failed:", error);
-        alert(`❌ Upload failed:\n\n${error.message}\n\nCheck console for details.`);
+        alert(
+          `❌ Upload failed:\n\n${error.message}\n\nCheck console for details.`,
+        );
       }
+    }
+
+    async read_io_map(mod_id, offset, size) {
+      logger.log(
+        `Reading IO map: module=0x${mod_id.toString(16)}, offset=${offset}, size=${size}`,
+      );
+
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.READ_IO_MAP,
+        [
+          mod_id & 0xff,
+          (mod_id >> 8) & 0xff,
+          (mod_id >> 16) & 0xff,
+          (mod_id >> 24) & 0xff,
+          offset & 0xff,
+          (offset >> 8) & 0xff,
+          size & 0xff,
+          (size >> 8) & 0xff,
+        ],
+        true,
+        true,
+      );
+
+      if (!reply || reply.length < 6) {
+        throw new Error("Invalid read_io_map response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `read_io_map failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      const ret_mod_id =
+        reply[3] | (reply[4] << 8) | (reply[5] << 16) | (reply[6] << 24);
+      const ret_size = reply[7] | (reply[8] << 8);
+      const data = reply.slice(9, 9 + ret_size);
+
+      logger.log(
+        `Read ${ret_size} bytes from module 0x${ret_mod_id.toString(16)}`,
+      );
+
+      return { mod_id: ret_mod_id, data: new Uint8Array(data) };
+    }
+
+    async message_write(mailbox, message) {
+      logger.log(`Writing message to mailbox ${mailbox}: "${message}"`);
+
+      // Convert message to bytes
+      const messageBytes =
+        typeof message === "string"
+          ? Array.from(new TextEncoder().encode(message))
+          : Array.from(message);
+
+      // Add null terminator
+      messageBytes.push(0);
+
+      await this.sendTelegram(
+        NXT_OPCODE.MESSAGE_WRITE,
+        [mailbox, messageBytes.length, ...messageBytes],
+        false, // No reply
+      );
+    }
+
+    async message_read(remote_inbox, local_inbox, remove = true) {
+      logger.log(`Reading message from mailbox ${remote_inbox}...`);
+
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.MESSAGE_READ,
+        [remote_inbox, local_inbox, remove ? 1 : 0],
+        true,
+      );
+
+      if (!reply || reply.length < 5) {
+        throw new Error("Invalid message_read response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `message_read failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      const ret_local_inbox = reply[3];
+      const size = reply[4];
+      const message = reply.slice(5, 5 + size);
+
+      logger.log(`Read ${size} bytes from mailbox ${ret_local_inbox}`);
+
+      return { local_inbox: ret_local_inbox, message: new Uint8Array(message) };
+    }
+
+    async start_program(filename) {
+      logger.log(`Starting program: ${filename}`);
+
+      const filenameBytes = new Array(20).fill(0);
+      for (let i = 0; i < Math.min(filename.length, 19); i++) {
+        filenameBytes[i] = filename.charCodeAt(i);
+      }
+
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.START_PROGRAM,
+        filenameBytes,
+        true,
+      );
+
+      if (!reply || reply.length < 3) {
+        throw new Error("Invalid start_program response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `start_program failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      logger.success(`Program "${filename}" started`);
+    }
+
+    async keep_alive() {
+      const reply = await this.sendTelegram(NXT_OPCODE.KEEP_ALIVE, [], true);
+
+      if (!reply || reply.length < 7) {
+        throw new Error("Invalid keep_alive response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `keep_alive failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      const sleep_time =
+        reply[3] | (reply[4] << 8) | (reply[5] << 16) | (reply[6] << 24);
+
+      logger.log(`Keep alive OK, sleep time: ${sleep_time}ms`);
+
+      return sleep_time;
+    }
+
+    async stop_program() {
+      logger.log("Stopping program...");
+
+      const reply = await this.sendTelegram(NXT_OPCODE.STOP_PROGRAM, [], true);
+
+      if (!reply || reply.length < 3) {
+        throw new Error("Invalid stop_program response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `stop_program failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      logger.success("Program stopped");
+    }
+
+    async ls_get_status(port) {
+      // For ultrasonic sensors
+      const portNum = PORT[port];
+
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.LS_GET_STATUS,
+        [portNum],
+        true,
+      );
+
+      if (!reply || reply.length < 4) {
+        throw new Error("Invalid ls_get_status response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00 && status !== 0x20) {
+        // 0x20 = pending
+        throw new Error(
+          `ls_get_status failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      const bytes_ready = reply[3];
+
+      return { status, bytes_ready };
+    }
+
+    async get_device_info() {
+      logger.log("Getting device info...");
+
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.GET_DEVICE_INFO,
+        [],
+        true,
+        true,
+      );
+
+      if (!reply || reply.length < 33) {
+        throw new Error("Invalid get_device_info response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `get_device_info failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      // Parse name (15 bytes, null-terminated)
+      let name = "";
+      for (let i = 0; i < 15; i++) {
+        const char = reply[3 + i];
+        if (char === 0) break;
+        name += String.fromCharCode(char);
+      }
+
+      // Parse Bluetooth address (6 bytes)
+      const a0 = reply[18];
+      const a1 = reply[19];
+      const a2 = reply[20];
+      const a3 = reply[21];
+      const a4 = reply[22];
+      const a5 = reply[23];
+      const address = `${a0.toString(16).padStart(2, "0").toUpperCase()}:${a1.toString(16).padStart(2, "0").toUpperCase()}:${a2.toString(16).padStart(2, "0").toUpperCase()}:${a3.toString(16).padStart(2, "0").toUpperCase()}:${a4.toString(16).padStart(2, "0").toUpperCase()}:${a5.toString(16).padStart(2, "0").toUpperCase()}`;
+
+      // Skip byte 24 (not used)
+
+      // Signal strengths (4 bytes)
+      const signal_strengths = [reply[25], reply[26], reply[27], reply[28]];
+
+      // User flash (4 bytes, little-endian)
+      const user_flash =
+        reply[29] | (reply[30] << 8) | (reply[31] << 16) | (reply[32] << 24);
+
+      logger.log(`Device: ${name}, Address: ${address}, Flash: ${user_flash}`);
+
+      return { name, address, signal_strengths, user_flash };
+    }
+
+    async write_io_map(mod_id, offset, data) {
+      logger.log(
+        `Writing IO map: module=0x${mod_id.toString(16)}, offset=${offset}, size=${data.length}`,
+      );
+
+      const reply = await this.sendTelegram(
+        NXT_OPCODE.WRITE_IO_MAP,
+        [
+          mod_id & 0xff,
+          (mod_id >> 8) & 0xff,
+          (mod_id >> 16) & 0xff,
+          (mod_id >> 24) & 0xff,
+          offset & 0xff,
+          (offset >> 8) & 0xff,
+          data.length & 0xff,
+          (data.length >> 8) & 0xff,
+          ...Array.from(data),
+        ],
+        true,
+        true,
+      );
+
+      if (!reply || reply.length < 6) {
+        throw new Error("Invalid write_io_map response");
+      }
+
+      const status = reply[2];
+      if (status !== 0x00) {
+        throw new Error(
+          `write_io_map failed: ${NXT_ERROR[status] || "Unknown error"}`,
+        );
+      }
+
+      const ret_mod_id =
+        reply[3] | (reply[4] << 8) | (reply[5] << 16) | (reply[6] << 24);
+      const ret_size = reply[7] | (reply[8] << 8);
+
+      logger.log(
+        `Wrote ${ret_size} bytes to module 0x${ret_mod_id.toString(16)}`,
+      );
+
+      return { mod_id: ret_mod_id, size: ret_size };
     }
 
     async fullWorkflow() {
       logger.log("=".repeat(60));
       logger.log("FULL WORKFLOW: TRANSPILE → COMPILE → UPLOAD");
       logger.log("=".repeat(60));
-      
+
       try {
         // Step 1: Transpile
         logger.log("\n[1/3] Transpiling project...");
         this.nxcCode = this.transpiler.transpileProject();
         logger.success("✅ Transpilation complete");
         await this.peripheral.sleep(500);
-        
+
         // Step 2: Compile
         logger.log("\n[2/3] Compiling to bytecode...");
         const response = await fetch(`${this.compilerUrl}/compile`, {
@@ -2759,38 +4173,38 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ compiler: "nxc", code: this.nxcCode }),
         });
-        
+
         if (!response.ok) {
           throw new Error(`Compilation failed: HTTP ${response.status}`);
         }
-        
+
         const result = await response.json();
         if (!result.success) {
           throw new Error(result.error || "Compilation failed");
         }
-        
+
         this.rxeBase64 = result.base64;
         logger.success("✅ Compilation complete");
         await this.peripheral.sleep(500);
-        
+
         // Step 3: Upload
         if (!this.peripheral.isConnected()) {
           throw new Error("NXT not connected! Please connect first.");
         }
-        
+
         logger.log("\n[3/3] Uploading to NXT...");
         const binaryString = atob(this.rxeBase64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        
+
         const filename = "program.rxe";
         const filenameBytes = new Array(20).fill(0);
         for (let i = 0; i < Math.min(filename.length, 19); i++) {
           filenameBytes[i] = filename.charCodeAt(i);
         }
-        
+
         const openCmd = [
           ...filenameBytes,
           bytes.length & 0xff,
@@ -2798,47 +4212,63 @@
           (bytes.length >> 16) & 0xff,
           (bytes.length >> 24) & 0xff,
         ];
-        
+
         const openReply = await this.peripheral.sendTelegram(
           NXT_OPCODE.OPEN_WRITE,
           openCmd,
           true,
-          true
+          true,
         );
-        
+
         if (!openReply || openReply[2] !== 0x00) {
           throw new Error("Failed to open file on NXT");
         }
-        
+
         const handle = openReply[3];
         const chunkSize = 32;
-        
+
         for (let i = 0; i < bytes.length; i += chunkSize) {
           const chunk = bytes.slice(i, Math.min(i + chunkSize, bytes.length));
           const writeCmd = [handle, ...Array.from(chunk)];
-          await this.peripheral.sendTelegram(NXT_OPCODE.WRITE, writeCmd, true, true);
+          await this.peripheral.sendTelegram(
+            NXT_OPCODE.WRITE,
+            writeCmd,
+            true,
+            true,
+          );
           await this.peripheral.sleep(20);
-          
+
           if (i % 320 === 0) {
             logger.log(`Upload: ${Math.round((i / bytes.length) * 100)}%`);
           }
         }
-        
-        await this.peripheral.sendTelegram(NXT_OPCODE.CLOSE, [handle], true, true);
-        
+
+        await this.peripheral.sendTelegram(
+          NXT_OPCODE.CLOSE,
+          [handle],
+          true,
+          true,
+        );
+
         logger.success("✅ Upload complete!");
         logger.log("=".repeat(60));
         logger.success("🎉 WORKFLOW COMPLETE!");
         logger.log("=".repeat(60));
-        
-        alert(`🎉 SUCCESS!\n\n✅ Transpiled\n✅ Compiled\n✅ Uploaded\n\nFile: ${filename}\nSize: ${bytes.length} bytes\n\nRun "${filename}" from the NXT menu!`);
+
+        alert(
+          `🎉 SUCCESS!\n\n✅ Transpiled\n✅ Compiled\n✅ Uploaded\n\nFile: ${filename}\nSize: ${bytes.length} bytes\n\nRun "${filename}" from the NXT menu!`,
+        );
       } catch (error) {
         logger.error("Workflow failed:", error);
-        alert(`❌ Workflow failed:\n\n${error.message}\n\nCheck console for details.`);
+        alert(
+          `❌ Workflow failed:\n\n${error.message}\n\nCheck console for details.`,
+        );
       }
     }
   }
 
   Scratch.extensions.register(new LegoNXTExtension());
-  logger.success("🧱 LEGO NXT Extension loaded with Bluetooth and full transpilation support!");
+  logger.success(
+    "🧱 LEGO NXT Extension loaded with Bluetooth and full transpilation support!",
+  );
 })(Scratch);

@@ -245,7 +245,11 @@
           if (refBlock) return this.evaluateBlock(refBlock, blocks);
         }
 
-        if (inputType === 3 && Array.isArray(inputData) && inputData.length >= 2) {
+        if (
+          inputType === 3 &&
+          Array.isArray(inputData) &&
+          inputData.length >= 2
+        ) {
           if (typeof inputData[0] === "string") {
             const refBlock = blocks._blocks[inputData[0]];
             if (refBlock) return this.evaluateBlock(refBlock, blocks);
@@ -302,25 +306,40 @@
       }
       // NXT Sensor reporters
       else if (block.opcode === "motorPosition") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         return `MotorRotationCount(OUT_${port})`;
       } else if (block.opcode === "touchPressed") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`touch_${port}`);
         return `(SENSOR_${sensorNum} == 1)`;
       } else if (block.opcode === "lightValue") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`light_${port}`);
         return `Sensor(IN_${sensorNum})`;
       } else if (block.opcode === "soundValue") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`sound_${port}`);
         return `Sensor(IN_${sensorNum})`;
       } else if (block.opcode === "ultrasonicDist") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.sensorSetup.add(`ultrasonic_${port}`);
         return `SensorUS(IN_${sensorNum})`;
@@ -411,7 +430,10 @@
 
       // NXT Motor blocks
       if (opcode === "motorOn") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const power = this.getInputValue(block, "POWER", blocks);
         this.addLine(`if (${power} > 0) {`);
         this.increaseIndent();
@@ -423,17 +445,28 @@
         this.decreaseIndent();
         this.addLine(`}`);
       } else if (opcode === "motorDegrees") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const power = this.getInputValue(block, "POWER", blocks);
         const degrees = this.getInputValue(block, "DEG", blocks);
         this.addLine(`RotateMotor(OUT_${port}, ${power}, ${degrees});`);
       } else if (opcode === "motorRotations") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const power = this.getInputValue(block, "POWER", blocks);
         const rotations = this.getInputValue(block, "ROT", blocks);
-        this.addLine(`RotateMotor(OUT_${port}, ${power}, (${rotations}) * 360);`);
+        this.addLine(
+          `RotateMotor(OUT_${port}, ${power}, (${rotations}) * 360);`,
+        );
       } else if (opcode === "motorStop") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const action = this.getInputValue(block, "ACTION", blocks).replace(
           /"/g,
           "",
@@ -444,18 +477,27 @@
           this.addLine(`Float(OUT_${port});`);
         }
       } else if (opcode === "resetMotor") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         this.addLine(`ResetRotationCount(OUT_${port});`);
       }
 
       // Sensor setup blocks
       else if (opcode === "setupTouch") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.addLine(`SetSensorTouch(IN_${sensorNum});`);
         this.sensorSetup.add(`touch_${port}`);
       } else if (opcode === "setupLight") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const led = this.getInputValue(block, "LED", blocks).replace(/"/g, "");
         const sensorNum = port.replace("S", "");
         if (led === "on") {
@@ -465,12 +507,18 @@
         }
         this.sensorSetup.add(`light_${port}`);
       } else if (opcode === "setupSound") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.addLine(`SetSensorSound(IN_${sensorNum});`);
         this.sensorSetup.add(`sound_${port}`);
       } else if (opcode === "setupUltrasonic") {
-        const port = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
+        const port = this.getInputValue(block, "PORT", blocks).replace(
+          /"/g,
+          "",
+        );
         const sensorNum = port.replace("S", "");
         this.addLine(`SetSensorLowspeed(IN_${sensorNum});`);
         this.sensorSetup.add(`ultrasonic_${port}`);
@@ -482,7 +530,10 @@
         const ms = this.getInputValue(block, "MS", blocks);
         this.addLine(`PlayTone(${freq}, ${ms});`);
       } else if (opcode === "playNote") {
-        const note = this.getInputValue(block, "NOTE", blocks).replace(/"/g, "");
+        const note = this.getInputValue(block, "NOTE", blocks).replace(
+          /"/g,
+          "",
+        );
         const beats = this.getInputValue(block, "BEATS", blocks);
         const noteFreqs = {
           C4: 262,
@@ -543,11 +594,12 @@
         const y = this.getInputValue(block, "Y", blocks);
         const w = this.getInputValue(block, "W", blocks);
         const h = this.getInputValue(block, "H", blocks);
-        const fill = this.getInputValue(block, "FILL", blocks).replace(/"/g, "");
+        const fill = this.getInputValue(block, "FILL", blocks).replace(
+          /"/g,
+          "",
+        );
         if (fill === "filled") {
-          this.addLine(
-            `RectOut(${x}, ${y}, ${w}, ${h}, DRAW_OPT_FILL_SHAPE);`,
-          );
+          this.addLine(`RectOut(${x}, ${y}, ${w}, ${h}, DRAW_OPT_FILL_SHAPE);`);
         } else {
           this.addLine(`RectOut(${x}, ${y}, ${w}, ${h});`);
         }
@@ -1256,7 +1308,9 @@
       }
 
       if (allData.length !== 800) {
-        console.error(`❌ [NXT] Incomplete screen data: ${allData.length} bytes`);
+        console.error(
+          `❌ [NXT] Incomplete screen data: ${allData.length} bytes`,
+        );
         return null;
       }
 
