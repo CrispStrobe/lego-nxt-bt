@@ -45,7 +45,6 @@
       motorRunDegrees: "motor [PORT] run [DEGREES] degrees at [POWER]%",
       motorStop: "motor [PORT] stop [BRAKE]",
       motorReset: "reset motor [PORT]",
-      motorPolarity: "set motor [PORT] polarity [POLARITY]",
       tankDrive: "tank drive L:[LEFT] R:[RIGHT] for [VALUE] [UNIT]",
       steerDrive: "steer [STEERING] speed [SPEED]% for [VALUE] [UNIT]",
       motorPosition: "motor [PORT] position",
@@ -175,7 +174,6 @@
       motorRunDegrees: "Motor [PORT] läuft [DEGREES] Grad mit [POWER]%",
       motorStop: "Motor [PORT] stopp [BRAKE]",
       motorReset: "Motor [PORT] zurücksetzen",
-      motorPolarity: "setze Motor [PORT] Polarität [POLARITY]",
       tankDrive: "Kettenantrieb L:[LEFT] R:[RIGHT] für [VALUE] [UNIT]",
       steerDrive: "Lenken [STEERING] Geschw. [SPEED]% für [VALUE] [UNIT]",
       motorPosition: "Motor [PORT] Position",
@@ -314,7 +312,6 @@
       this.variableCounter = 0;
       this.labelCounter = 0;
       this.threadCounter = 0;
-      this.arrayCounter = 0;
       this.variables = new Map(); // Maps Scratch variable names to LMS variable info
       this.globalVars = []; // Track global variables
       this.localVars = []; // Track local variables in current scope
@@ -323,53 +320,48 @@
       this.debugLog = [];
       this.currentThread = "MAIN";
       this.spriteStates = {};
-      this.errors = [];
-      this.warnings = [];
 
-      // LMS opcode constants (WITHOUT "op" prefix per documentation)
+      // LMS opcode constants
       this.opcodes = {
         // Motor opcodes
-        OUTPUT_POWER: "OUTPUT_POWER",
-        OUTPUT_START: "OUTPUT_START",
-        OUTPUT_STOP: "OUTPUT_STOP",
-        OUTPUT_SPEED: "OUTPUT_SPEED",
-        OUTPUT_TIME_POWER: "OUTPUT_TIME_POWER",
-        OUTPUT_TIME_SPEED: "OUTPUT_TIME_SPEED",
-        OUTPUT_STEP_POWER: "OUTPUT_STEP_POWER",
-        OUTPUT_STEP_SPEED: "OUTPUT_STEP_SPEED",
-        OUTPUT_READ: "OUTPUT_READ",
-        OUTPUT_RESET: "OUTPUT_RESET",
-        OUTPUT_CLR_COUNT: "OUTPUT_CLR_COUNT",
-        OUTPUT_GET_COUNT: "OUTPUT_GET_COUNT",
-        OUTPUT_POLARITY: "OUTPUT_POLARITY",
-        OUTPUT_READY: "OUTPUT_READY",
+        OUTPUT_POWER: "opOUTPUT_POWER",
+        OUTPUT_START: "opOUTPUT_START",
+        OUTPUT_STOP: "opOUTPUT_STOP",
+        OUTPUT_SPEED: "opOUTPUT_SPEED",
+        OUTPUT_TIME_POWER: "opOUTPUT_TIME_POWER",
+        OUTPUT_TIME_SPEED: "opOUTPUT_TIME_SPEED",
+        OUTPUT_STEP_POWER: "opOUTPUT_STEP_POWER",
+        OUTPUT_STEP_SPEED: "opOUTPUT_STEP_SPEED",
+        OUTPUT_READ: "opOUTPUT_READ",
+        OUTPUT_RESET: "opOUTPUT_RESET",
+        OUTPUT_CLR_COUNT: "opOUTPUT_CLR_COUNT",
+        OUTPUT_GET_COUNT: "opOUTPUT_GET_COUNT",
 
         // Sensor opcodes
-        INPUT_DEVICE: "INPUT_DEVICE",
-        INPUT_READ: "INPUT_READ",
-        INPUT_READSI: "INPUT_READSI",
-        INPUT_READY: "INPUT_READY",
-        INPUT_TEST: "INPUT_TEST",
+        INPUT_DEVICE: "opINPUT_DEVICE",
+        INPUT_READ: "opINPUT_READ",
+        INPUT_READSI: "opINPUT_READSI",
+        INPUT_READY: "opINPUT_READY",
 
         // Display opcodes
-        UI_DRAW: "UI_DRAW",
-        UI_WRITE: "UI_WRITE",
-        UI_READ: "UI_READ",
-        UI_BUTTON: "UI_BUTTON",
+        UI_DRAW: "opUI_DRAW",
+        UI_WRITE: "opUI_WRITE",
 
         // Sound opcodes
-        SOUND: "SOUND",
-        SOUND_READY: "SOUND_READY",
-        SOUND_TEST: "SOUND_TEST",
+        SOUND: "opSOUND",
+        SOUND_READY: "opSOUND_READY",
+
+        // LED opcodes
+        UI_BUTTON: "opUI_BUTTON",
 
         // Timer opcodes
-        TIMER_WAIT: "TIMER_WAIT",
-        TIMER_READY: "TIMER_READY",
-        TIMER_READ: "TIMER_READ",
-        TIMER_READ_US: "TIMER_READ_US",
+        TIMER_WAIT: "opTIMER_WAIT",
+        TIMER_READY: "opTIMER_READY",
+        TIMER_READ: "opTIMER_READ",
 
         // System opcodes
-        INFO: "INFO",
+        UI_READ: "opUI_READ",
+        INFO: "opINFO",
 
         // Program flow
         JR: "JR",
@@ -406,9 +398,6 @@
         XOR8: "XOR8",
         XOR16: "XOR16",
         XOR32: "XOR32",
-        RL8: "RL8",
-        RL16: "RL16",
-        RL32: "RL32",
 
         // Comparison
         CP_LT8: "CP_LT8",
@@ -453,46 +442,6 @@
         MOVEF_16: "MOVEF_16",
         MOVEF_32: "MOVEF_32",
         MOVEF_F: "MOVEF_F",
-
-        // Jump operations
-        JR_LT8: "JR_LT8",
-        JR_LT16: "JR_LT16",
-        JR_LT32: "JR_LT32",
-        JR_LTF: "JR_LTF",
-        JR_GT8: "JR_GT8",
-        JR_GT16: "JR_GT16",
-        JR_GT32: "JR_GT32",
-        JR_GTF: "JR_GTF",
-        JR_EQ8: "JR_EQ8",
-        JR_EQ16: "JR_EQ16",
-        JR_EQ32: "JR_EQ32",
-        JR_EQF: "JR_EQF",
-        JR_NEQ8: "JR_NEQ8",
-        JR_NEQ16: "JR_NEQ16",
-        JR_NEQ32: "JR_NEQ32",
-        JR_NEQF: "JR_NEQF",
-        JR_LTEQ8: "JR_LTEQ8",
-        JR_LTEQ16: "JR_LTEQ16",
-        JR_LTEQ32: "JR_LTEQ32",
-        JR_LTEQF: "JR_LTEQF",
-        JR_GTEQ8: "JR_GTEQ8",
-        JR_GTEQ16: "JR_GTEQ16",
-        JR_GTEQ32: "JR_GTEQ32",
-        JR_GTEQF: "JR_GTEQF",
-
-        // String operations
-        STRINGS: "STRINGS",
-
-        // Array operations
-        ARRAY: "ARRAY",
-        ARRAY_READ: "ARRAY_READ",
-        ARRAY_WRITE: "ARRAY_WRITE",
-
-        // Math operations
-        MATH: "MATH",
-
-        // Random
-        RANDOM: "RANDOM",
       };
 
       // UI_DRAW subcodes
@@ -541,67 +490,6 @@
         SERVICE: "SERVICE",
       };
 
-      // UI_BUTTON subcodes
-      this.UI_BUTTON_CMD = {
-        SHORTPRESS: "SHORTPRESS",
-        LONGPRESS: "LONGPRESS",
-        WAIT_FOR_PRESS: "WAIT_FOR_PRESS",
-        FLUSH: "FLUSH",
-        PRESS: "PRESS",
-        RELEASE: "RELEASE",
-        GET_HORZ: "GET_HORZ",
-        GET_VERT: "GET_VERT",
-        PRESSED: "PRESSED",
-        SET_BACK_BLOCK: "SET_BACK_BLOCK",
-        GET_BACK_BLOCK: "GET_BACK_BLOCK",
-        TESTSHORTPRESS: "TESTSHORTPRESS",
-        TESTLONGPRESS: "TESTLONGPRESS",
-        GET_BUMPED: "GET_BUMPED",
-        GET_CLICK: "GET_CLICK",
-      };
-
-      // Button constants
-      this.BUTTONS = {
-        UP: "UP_BUTTON",
-        DOWN: "DOWN_BUTTON",
-        LEFT: "LEFT_BUTTON",
-        RIGHT: "RIGHT_BUTTON",
-        ENTER: "ENTER_BUTTON",
-        BACK: "BACK_BUTTON",
-      };
-
-      // UI_READ subcodes
-      this.UI_READ_CMD = {
-        GET_VBATT: "GET_VBATT",
-        GET_IBATT: "GET_IBATT",
-        GET_LBATT: "GET_LBATT",
-        GET_VOLUME: "GET_VOLUME",
-      };
-
-      // UI_WRITE subcodes
-      this.UI_WRITE_CMD = {
-        LED: "LED",
-        SET_VOLUME: "SET_VOLUME",
-      };
-
-      // INFO subcodes
-      this.INFO_CMD = {
-        GET_FREE: "GET_FREE",
-      };
-
-      // STRINGS subcodes
-      this.STRINGS_CMD = {
-        DUPLICATE: "DUPLICATE",
-      };
-
-      // ARRAY subcodes
-      this.ARRAY_CMD = {
-        CREATE8: "CREATE8",
-        CREATE16: "CREATE16",
-        CREATE32: "CREATE32",
-        CREATEF: "CREATEF",
-      };
-
       // Port definitions
       this.OUTPUT_PORTS = {
         A: "0x01",
@@ -618,30 +506,34 @@
         4: "3",
       };
 
-      // Sensor types (from typedata.rcf)
+      // Sensor types
       this.SENSOR_TYPE = {
         NONE: "0",
+        TOUCH: "16",
+        TEMP: "17",
+        LIGHT: "18",
+        SOUND: "19",
+        COLOR: "29",
+        ULTRASONIC: "30",
+        GYRO: "32",
+        IR: "33",
+        EV3_TOUCH: "16",
+        EV3_COLOR: "29",
+        EV3_ULTRASONIC: "30",
+        EV3_GYRO: "32",
+        EV3_IR: "33",
         NXT_TOUCH: "1",
         NXT_LIGHT: "2",
         NXT_SOUND: "3",
         NXT_COLOR: "4",
         NXT_ULTRASONIC: "5",
         NXT_TEMP: "6",
-        LARGE_MOTOR: "7",
-        MEDIUM_MOTOR: "8",
-        EV3_TOUCH: "16",
-        EV3_COLOR: "29",
-        EV3_ULTRASONIC: "30",
-        EV3_GYRO: "32",
-        EV3_IR: "33",
-        I2C: "100",
       };
 
       // Sensor modes
       this.SENSOR_MODE = {
         // Touch
         TOUCH: "0",
-        BUMP: "1",
         // Color
         COLOR_REFLECTED: "0",
         COLOR_AMBIENT: "1",
@@ -653,10 +545,6 @@
         US_DIST_CM: "0",
         US_DIST_IN: "1",
         US_LISTEN: "2",
-        US_SI_CM: "3",
-        US_SI_IN: "4",
-        US_DC_CM: "5",
-        US_DC_IN: "6",
         // Gyro
         GYRO_ANGLE: "0",
         GYRO_RATE: "1",
@@ -667,22 +555,6 @@
         IR_PROX: "0",
         IR_SEEK: "1",
         IR_REMOTE: "2",
-        IR_REMOTE_ADV: "3",
-        IR_SEEK_ALT: "4",
-        IR_CALIBRATE: "5",
-        // Light
-        LIGHT_REFLECTED: "0",
-        LIGHT_AMBIENT: "1",
-        // Sound
-        SOUND_DB: "0",
-        SOUND_DBA: "1",
-        // Temperature
-        TEMP_C: "0",
-        TEMP_F: "1",
-        // Motor
-        MOTOR_DEGREE: "0",
-        MOTOR_ROTATION: "1",
-        MOTOR_SPEED: "2",
       };
 
       // LED colors
@@ -698,48 +570,17 @@
         RED_PULSE: "8",
         ORANGE_PULSE: "9",
       };
-
-      // Math functions
-      this.MATH_FUNC = {
-        ABS: "ABS",
-        NEGATE: "NEGATE",
-        SQRT: "SQRT",
-        ROUND: "ROUND",
-        FLOOR: "FLOOR",
-        CEIL: "CEIL",
-        EXP: "EXP",
-        LOG: "LOG",
-        LN: "LN",
-        SIN: "SIN",
-        COS: "COS",
-        TAN: "TAN",
-        ASIN: "ASIN",
-        ACOS: "ACOS",
-        ATAN: "ATAN",
-        POW: "POW",
-        TRUNC: "TRUNC",
-        MOD8: "MOD8",
-        MOD16: "MOD16",
-        MOD32: "MOD32",
-        MOD: "MOD",
-      };
     }
 
-    log(message, data = null, level = "INFO") {
+    log(message, data = null) {
       const timestamp = new Date().toISOString();
-      const logEntry = `[${timestamp}] [LMS-${level}] ${message}`;
-
-      if (level === "ERROR") {
-        console.error(logEntry, data || "");
-        this.errors.push({ timestamp, message, data });
-      } else if (level === "WARN") {
-        console.warn(logEntry, data || "");
-        this.warnings.push({ timestamp, message, data });
+      const logEntry = `[${timestamp}] [LMS] ${message}`;
+      if (data !== null) {
+        console.log(logEntry, data);
       } else {
-        console.log(logEntry, data || "");
+        console.log(logEntry);
       }
-
-      this.debugLog.push({ timestamp, level, message, data });
+      this.debugLog.push({ timestamp, message, data });
     }
 
     indent() {
@@ -748,7 +589,7 @@
 
     addLine(code) {
       this.lmsCode += this.indent() + code + "\n";
-      this.log(`Added line: ${code}`, null, "DEBUG");
+      this.log(`Added line: ${code}`);
     }
 
     addComment(comment) {
@@ -766,11 +607,7 @@
         this.addLine(`${fullType} ${varName}`);
       }
 
-      this.log(
-        `Allocated variable: ${varName} (${fullType})`,
-        { isGlobal },
-        "DEBUG",
-      );
+      this.log(`Allocated variable: ${varName} (${fullType})`, { isGlobal });
       return varName;
     }
 
@@ -787,7 +624,7 @@
 
     generateLabel(prefix = "LABEL") {
       const label = `${prefix}_${this.labelCounter++}`;
-      this.log(`Generated label: ${label}`, null, "DEBUG");
+      this.log(`Generated label: ${label}`);
       return label;
     }
 
@@ -830,41 +667,22 @@
         // Generate broadcast handlers as subcalls
         this.generateBroadcastSubcalls();
 
-        // Add program end
-        this.addComment("End of program");
-        this.addLine("OBJECT_END()");
-
         // Close main thread
-        this.indentLevel--;
         this.addLine("}");
 
         this.log("=== LMS Transpilation Complete ===", {
           codeLength: this.lmsCode.length,
           lines: this.lmsCode.split("\n").length,
-          errors: this.errors.length,
-          warnings: this.warnings.length,
         });
-
-        if (this.errors.length > 0) {
-          this.log("ERRORS DETECTED", this.errors, "ERROR");
-        }
-
-        if (this.warnings.length > 0) {
-          this.log("WARNINGS DETECTED", this.warnings, "WARN");
-        }
 
         console.log("=== GENERATED LMS CODE ===\n" + this.lmsCode);
 
         return this.lmsCode;
       } catch (error) {
-        this.log(
-          "CRITICAL ERROR during transpilation",
-          {
-            error: error.message,
-            stack: error.stack,
-          },
-          "ERROR",
-        );
+        this.log("ERROR during transpilation", {
+          error: error.message,
+          stack: error.stack,
+        });
         console.error(error);
         throw error;
       }
@@ -876,22 +694,19 @@
       this.variableCounter = 0;
       this.labelCounter = 0;
       this.threadCounter = 0;
-      this.arrayCounter = 0;
       this.variables.clear();
       this.globalVars = [];
       this.localVars = [];
       this.timerVars.clear();
       this.broadcastHandlers.clear();
       this.debugLog = [];
-      this.errors = [];
-      this.warnings = [];
       this.currentThread = "MAIN";
       this.spriteStates = {};
     }
 
     generateHeader() {
       this.addComment("Generated LMS Assembly from Scratch");
-      this.addComment("by TurboWarp EV3 LMS Extension v2.1");
+      this.addComment("by TurboWarp EV3 LMS Extension v2.0");
       this.addComment(`Language: ${currentLang}`);
       this.addComment(`Generated: ${new Date().toISOString()}`);
       this.addLine("");
@@ -906,12 +721,8 @@
       this.addLine("DATA8 port");
       this.addLine("DATA8 ports");
       this.addLine("DATA8 power");
-      this.addLine("DATA8 speed");
       this.addLine("DATA8 brake");
-      this.addLine("DATA8 polarity");
       this.addLine("DATA32 time_ms");
-      this.addLine("DATA32 ramp_up");
-      this.addLine("DATA32 ramp_down");
       this.addLine("DATA32 degrees");
       this.addLine("DATA32 rotations");
       this.addLine("DATA16 frequency");
@@ -930,19 +741,11 @@
       this.addLine("DATA16 temp16");
       this.addLine("DATA32 temp32");
       this.addLine("DATAF tempf");
-      this.addLine("DATA8 button_state");
-      this.addLine("DATA8 volume");
       this.addLine("");
 
       // Initialize layer to 0
       this.addComment("Initialize layer");
       this.addLine("MOVE8_8(0, layer)");
-      this.addLine("");
-
-      // Initialize default ramp times (100ms)
-      this.addComment("Initialize default motor ramp times");
-      this.addLine("MOVE32_32(100, ramp_up)");
-      this.addLine("MOVE32_32(100, ramp_down)");
       this.addLine("");
     }
 
@@ -993,7 +796,7 @@
       } else if (opcode === "event_whenkeypressed") {
         // Key pressed events not supported in LMS - log warning
         this.addComment("WARNING: Key press events not supported in LMS");
-        this.log("WARNING: Key press event not supported in LMS", null, "WARN");
+        this.log("WARNING: Key press event not supported in LMS");
       }
     }
 
@@ -1028,21 +831,13 @@
       while (currentId) {
         const block = blocks._blocks[currentId];
         if (!block) {
-          this.log(
-            "Block not found, ending chain",
-            { blockId: currentId },
-            "WARN",
-          );
+          this.log("Block not found, ending chain", { blockId: currentId });
           break;
         }
 
         chainLength++;
         if (chainLength > maxChainLength) {
-          this.log(
-            "WARNING: Block chain too long, stopping",
-            { chainLength },
-            "WARN",
-          );
+          this.log("WARNING: Block chain too long, stopping", { chainLength });
           this.addComment(`WARNING: Chain exceeded ${maxChainLength} blocks`);
           break;
         }
@@ -1072,8 +867,6 @@
           this.transpileMotorStop(block, blocks);
         } else if (opcode === "ev3lms_motorReset") {
           this.transpileMotorReset(block, blocks);
-        } else if (opcode === "ev3lms_motorPolarity") {
-          this.transpileMotorPolarity(block, blocks);
         } else if (opcode === "ev3lms_tankDrive") {
           this.transpileTankDrive(block, blocks);
         } else if (opcode === "ev3lms_steerDrive") {
@@ -1119,40 +912,6 @@
           this.transpileSetLED(block, blocks);
         } else if (opcode === "ev3lms_ledAllOff") {
           this.transpileLEDAllOff(block, blocks);
-        }
-
-        // Button blocks
-        else if (opcode === "ev3lms_buttonPressed") {
-          this.transpileButtonPressed(block, blocks);
-        } else if (opcode === "ev3lms_waitForButton") {
-          this.transpileWaitForButton(block, blocks);
-        }
-
-        // Sensor blocks
-        else if (opcode === "ev3lms_touchSensor") {
-          this.transpileTouchSensor(block, blocks);
-        } else if (opcode === "ev3lms_touchSensorBumped") {
-          this.transpileTouchSensorBumped(block, blocks);
-        } else if (opcode === "ev3lms_colorSensor") {
-          this.transpileColorSensor(block, blocks);
-        } else if (opcode === "ev3lms_colorSensorRGB") {
-          this.transpileColorSensorRGB(block, blocks);
-        } else if (opcode === "ev3lms_ultrasonicSensor") {
-          this.transpileUltrasonicSensor(block, blocks);
-        } else if (opcode === "ev3lms_ultrasonicListen") {
-          this.transpileUltrasonicListen(block, blocks);
-        } else if (opcode === "ev3lms_gyroSensor") {
-          this.transpileGyroSensor(block, blocks);
-        } else if (opcode === "ev3lms_gyroReset") {
-          this.transpileGyroReset(block, blocks);
-        } else if (opcode === "ev3lms_irProximity") {
-          this.transpileIRProximity(block, blocks);
-        } else if (opcode === "ev3lms_irBeaconHeading") {
-          this.transpileIRBeaconHeading(block, blocks);
-        } else if (opcode === "ev3lms_irBeaconDistance") {
-          this.transpileIRBeaconDistance(block, blocks);
-        } else if (opcode === "ev3lms_irRemoteButton") {
-          this.transpileIRRemoteButton(block, blocks);
         }
 
         // Control blocks
@@ -1209,38 +968,16 @@
           this.transpilePlaySound(block, blocks);
         }
 
-        // Timer blocks
-        else if (opcode === "ev3lms_resetTimer") {
-          this.transpileResetTimer(block, blocks);
-        } else if (opcode === "ev3lms_timerValue") {
-          this.transpileTimerValue(block, blocks);
-        }
-
-        // System blocks
-        else if (opcode === "ev3lms_batteryLevel") {
-          this.transpileBatteryLevel(block, blocks);
-        } else if (opcode === "ev3lms_batteryVoltage") {
-          this.transpileBatteryVoltage(block, blocks);
-        } else if (opcode === "ev3lms_batteryCurrent") {
-          this.transpileBatteryCurrent(block, blocks);
-        } else if (opcode === "ev3lms_freeMemory") {
-          this.transpileFreeMemory(block, blocks);
-        }
-
         // Default - unsupported block
         else {
           this.addComment(`TODO: Unsupported block: ${opcode}`);
-          this.log(`WARNING: Unsupported block: ${opcode}`, null, "WARN");
+          this.log(`WARNING: Unsupported block: ${opcode}`);
         }
       } catch (error) {
-        this.log(
-          `ERROR processing block ${opcode}`,
-          {
-            error: error.message,
-            stack: error.stack,
-          },
-          "ERROR",
-        );
+        this.log(`ERROR processing block ${opcode}`, {
+          error: error.message,
+          stack: error.stack,
+        });
         this.addComment(`ERROR: ${opcode} - ${error.message}`);
       }
     }
@@ -1256,8 +993,8 @@
       this.addComment(`Motor ${port} run at ${power}%`);
       this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
       this.addLine(`MOVE8_8(${power}, power)`);
-      this.addLine(`OUTPUT_POWER(0, port, power)`);
-      this.addLine(`OUTPUT_START(0, port)`);
+      this.addLine(`OUTPUT_POWER(layer, port, power)`);
+      this.addLine(`OUTPUT_START(layer, port)`);
     }
 
     transpileMotorRunTime(block, blocks) {
@@ -1268,15 +1005,8 @@
       this.addComment(`Motor ${port} run for ${time} seconds at ${power}%`);
       this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
       this.addLine(`MOVE8_8(${power}, power)`);
-
-      // Calculate time_ms (time * 1000)
-      const timeMs = this.evaluateExpression(time, "*", 1000, 32);
-      this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
-
-      // Parameters: layer, motors, power, ramp_up_ms, run_ms, ramp_down_ms, brake
-      this.addLine(
-        `OUTPUT_TIME_POWER(0, port, power, ramp_up, time_ms, ramp_down, 1)`,
-      );
+      this.addLine(`MOVE32_32(${time} * 1000, time_ms)`);
+      this.addLine(`OUTPUT_TIME_POWER(layer, port, power, 0, time_ms, 0, 1)`);
     }
 
     transpileMotorRunRotations(block, blocks) {
@@ -1287,13 +1017,8 @@
       this.addComment(`Motor ${port} run ${rotations} rotations at ${power}%`);
       this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
       this.addLine(`MOVE8_8(${power}, power)`);
-
-      // Calculate degrees (rotations * 360)
-      const degreesValue = this.evaluateExpression(rotations, "*", 360, 32);
-      this.addLine(`MOVE32_32(${degreesValue}, degrees)`);
-
-      // Parameters: layer, motors, power, ramp_up_degrees, run_degrees, ramp_down_degrees, brake
-      this.addLine(`OUTPUT_STEP_POWER(0, port, power, 30, degrees, 30, 1)`);
+      this.addLine(`MOVE32_32(${rotations} * 360, degrees)`);
+      this.addLine(`OUTPUT_STEP_POWER(layer, port, power, 0, degrees, 0, 1)`);
     }
 
     transpileMotorRunDegrees(block, blocks) {
@@ -1305,8 +1030,7 @@
       this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
       this.addLine(`MOVE8_8(${power}, power)`);
       this.addLine(`MOVE32_32(${degrees}, degrees)`);
-      // Parameters: layer, motors, power, ramp_up_degrees, run_degrees, ramp_down_degrees, brake
-      this.addLine(`OUTPUT_STEP_POWER(0, port, power, 10, degrees, 10, 1)`);
+      this.addLine(`OUTPUT_STEP_POWER(layer, port, power, 0, degrees, 0, 1)`);
     }
 
     transpileMotorStop(block, blocks) {
@@ -1317,7 +1041,7 @@
 
       this.addComment(`Motor ${port} stop (brake: ${brake})`);
       this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
-      this.addLine(`OUTPUT_STOP(0, port, ${brakeMode})`);
+      this.addLine(`OUTPUT_STOP(layer, port, ${brakeMode})`);
     }
 
     transpileMotorReset(block, blocks) {
@@ -1325,18 +1049,8 @@
 
       this.addComment(`Reset motor ${port}`);
       this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
-      this.addLine(`OUTPUT_RESET(0, port)`);
-      this.addLine(`OUTPUT_CLR_COUNT(0, port)`);
-    }
-
-    transpileMotorPolarity(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const polarity = this.getInputValue(block, "POLARITY", blocks);
-
-      this.addComment(`Set motor ${port} polarity to ${polarity}`);
-      this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
-      this.addLine(`MOVE8_8(${polarity}, polarity)`);
-      this.addLine(`OUTPUT_POLARITY(0, port, polarity)`);
+      this.addLine(`OUTPUT_RESET(layer, port)`);
+      this.addLine(`OUTPUT_CLR_COUNT(layer, port)`);
     }
 
     transpileTankDrive(block, blocks) {
@@ -1351,40 +1065,38 @@
       const leftPort = this.OUTPUT_PORTS.B;
       const rightPort = this.OUTPUT_PORTS.C;
 
-      if (unit === '"seconds"' || unit === "seconds" || unit === "'seconds'") {
-        // Time-based - calculate value * 1000
-        const timeMs = this.evaluateExpression(value, "*", 1000, 32);
-        this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
+      if (unit === '"seconds"' || unit === "seconds") {
+        // Time-based
+        this.addLine(`MOVE32_32(${value} * 1000, time_ms)`);
         this.addLine(`MOVE8_8(${leftPort}, port)`);
         this.addLine(
-          `OUTPUT_TIME_POWER(0, port, ${left}, ramp_up, time_ms, ramp_down, 0)`,
+          `OUTPUT_TIME_POWER(layer, port, ${left}, 0, time_ms, 0, 0)`,
         );
         this.addLine(`MOVE8_8(${rightPort}, port)`);
         this.addLine(
-          `OUTPUT_TIME_POWER(0, port, ${right}, ramp_up, time_ms, ramp_down, 1)`,
+          `OUTPUT_TIME_POWER(layer, port, ${right}, 0, time_ms, 0, 1)`,
         );
-      } else if (
-        unit === '"rotations"' ||
-        unit === "rotations" ||
-        unit === "'rotations'"
-      ) {
-        // Rotation-based - calculate value * 360
-        const degreesValue = this.evaluateExpression(value, "*", 360, 32);
-        this.addLine(`MOVE32_32(${degreesValue}, degrees)`);
+      } else if (unit === '"rotations"' || unit === "rotations") {
+        // Rotation-based
+        this.addLine(`MOVE32_32(${value} * 360, degrees)`);
         this.addLine(`MOVE8_8(${leftPort}, port)`);
-        this.addLine(`OUTPUT_STEP_POWER(0, port, ${left}, 30, degrees, 30, 0)`);
+        this.addLine(
+          `OUTPUT_STEP_POWER(layer, port, ${left}, 0, degrees, 0, 0)`,
+        );
         this.addLine(`MOVE8_8(${rightPort}, port)`);
         this.addLine(
-          `OUTPUT_STEP_POWER(0, port, ${right}, 30, degrees, 30, 1)`,
+          `OUTPUT_STEP_POWER(layer, port, ${right}, 0, degrees, 0, 1)`,
         );
       } else {
-        // Degrees - no calculation needed
+        // Degrees
         this.addLine(`MOVE32_32(${value}, degrees)`);
         this.addLine(`MOVE8_8(${leftPort}, port)`);
-        this.addLine(`OUTPUT_STEP_POWER(0, port, ${left}, 10, degrees, 10, 0)`);
+        this.addLine(
+          `OUTPUT_STEP_POWER(layer, port, ${left}, 0, degrees, 0, 0)`,
+        );
         this.addLine(`MOVE8_8(${rightPort}, port)`);
         this.addLine(
-          `OUTPUT_STEP_POWER(0, port, ${right}, 10, degrees, 10, 1)`,
+          `OUTPUT_STEP_POWER(layer, port, ${right}, 0, degrees, 0, 1)`,
         );
       }
     }
@@ -1400,65 +1112,44 @@
       );
 
       // Calculate left and right power from steering
+      // steering: -100 (full left) to 100 (full right)
+      // 0 = straight
       const leftVar = this.allocateVariable(8, "steer_left");
       const rightVar = this.allocateVariable(8, "steer_right");
-      const steerVal = this.allocateVariable(8, "steer_val");
 
-      // Steering calculation
-      this.addLine(`MOVE8_8(${steering}, ${steerVal})`);
+      // Simple steering calculation
+      // If steering > 0: reduce right motor
+      // If steering < 0: reduce left motor
       this.addLine(`MOVE8_8(${speed}, ${leftVar})`);
       this.addLine(`MOVE8_8(${speed}, ${rightVar})`);
 
-      // If steering > 0: reduce right motor proportionally
-      // If steering < 0: reduce left motor proportionally
-      const skipLeft = this.generateLabel("SKIP_LEFT_ADJUST");
-      const skipRight = this.generateLabel("SKIP_RIGHT_ADJUST");
-      const continueSteer = this.generateLabel("CONTINUE_STEER");
-
-      this.addLine(`JR_LT8(${steerVal}, 0, ${skipRight})`);
-      // Positive steering - reduce right
-      this.addLine(`MUL8(${speed}, ${steerVal}, temp16)`);
-      this.addLine(`DIV16(temp16, 100, temp16)`);
-      this.addLine(`SUB16(${speed}, temp16, temp16)`);
-      this.addLine(`MOVE16_8(temp16, ${rightVar})`);
-      this.addLine(`JR(${continueSteer})`);
-
-      this.addLine(`${skipRight}:`);
-      this.addLine(`JR_GT8(${steerVal}, 0, ${skipLeft})`);
-      // Negative steering - reduce left
-      this.addLine(`MUL8(${speed}, ${steerVal}, temp16)`);
-      this.addLine(`DIV16(temp16, -100, temp16)`);
-      this.addLine(`SUB16(${speed}, temp16, temp16)`);
-      this.addLine(`MOVE16_8(temp16, ${leftVar})`);
-
-      this.addLine(`${skipLeft}:`);
-      this.addLine(`${continueSteer}:`);
+      // This is simplified - proper steering would need more complex math
+      // For now, just approximate
+      this.addComment("Simplified steering calculation");
 
       // Apply to motors
       const leftPort = this.OUTPUT_PORTS.B;
       const rightPort = this.OUTPUT_PORTS.C;
 
-      if (unit === '"seconds"' || unit === "seconds" || unit === "'seconds'") {
-        const timeMs = this.evaluateExpression(value, "*", 1000, 32);
-        this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
+      if (unit === '"seconds"' || unit === "seconds") {
+        this.addLine(`MOVE32_32(${value} * 1000, time_ms)`);
         this.addLine(`MOVE8_8(${leftPort}, port)`);
         this.addLine(
-          `OUTPUT_TIME_POWER(0, port, ${leftVar}, ramp_up, time_ms, ramp_down, 0)`,
+          `OUTPUT_TIME_POWER(layer, port, ${leftVar}, 0, time_ms, 0, 0)`,
         );
         this.addLine(`MOVE8_8(${rightPort}, port)`);
         this.addLine(
-          `OUTPUT_TIME_POWER(0, port, ${rightVar}, ramp_up, time_ms, ramp_down, 1)`,
+          `OUTPUT_TIME_POWER(layer, port, ${rightVar}, 0, time_ms, 0, 1)`,
         );
       } else {
-        const degreesValue = this.evaluateExpression(value, "*", 360, 32);
-        this.addLine(`MOVE32_32(${degreesValue}, degrees)`);
+        this.addLine(`MOVE32_32(${value} * 360, degrees)`);
         this.addLine(`MOVE8_8(${leftPort}, port)`);
         this.addLine(
-          `OUTPUT_STEP_POWER(0, port, ${leftVar}, 30, degrees, 30, 0)`,
+          `OUTPUT_STEP_POWER(layer, port, ${leftVar}, 0, degrees, 0, 0)`,
         );
         this.addLine(`MOVE8_8(${rightPort}, port)`);
         this.addLine(
-          `OUTPUT_STEP_POWER(0, port, ${rightVar}, 30, degrees, 30, 1)`,
+          `OUTPUT_STEP_POWER(layer, port, ${rightVar}, 0, degrees, 0, 1)`,
         );
       }
     }
@@ -1469,8 +1160,7 @@
 
     transpileScreenClear(block, blocks) {
       this.addComment("Clear screen");
-      this.addLine(`UI_DRAW(FILLWINDOW, 0, 0, 0)`);
-      this.addLine(`UI_DRAW(UPDATE)`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.CLEAN})`);
     }
 
     transpileScreenText(block, blocks) {
@@ -1479,7 +1169,7 @@
       const y = this.getInputValue(block, "Y", blocks);
 
       this.addComment(`Display text at (${x}, ${y})`);
-      this.addLine(`UI_DRAW(TEXT, 0, ${x}, ${y}, ${text})`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.TEXT}, 0, ${x}, ${y}, ${text})`);
     }
 
     transpileScreenTextLarge(block, blocks) {
@@ -1488,9 +1178,9 @@
       const y = this.getInputValue(block, "Y", blocks);
 
       this.addComment(`Display large text at (${x}, ${y})`);
-      this.addLine(`UI_DRAW(SELECT_FONT, 1)`); // Large font
-      this.addLine(`UI_DRAW(TEXT, 0, ${x}, ${y}, ${text})`);
-      this.addLine(`UI_DRAW(SELECT_FONT, 0)`); // Back to normal
+      this.addLine(`UI_DRAW(${this.UI_DRAW.SELECT_FONT}, 1)`); // Large font
+      this.addLine(`UI_DRAW(${this.UI_DRAW.TEXT}, 0, ${x}, ${y}, ${text})`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.SELECT_FONT}, 0)`); // Back to normal
     }
 
     transpileDrawPixel(block, blocks) {
@@ -1498,7 +1188,7 @@
       const y = this.getInputValue(block, "Y", blocks);
 
       this.addComment(`Draw pixel at (${x}, ${y})`);
-      this.addLine(`UI_DRAW(PIXEL, 0, ${x}, ${y})`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.PIXEL}, 0, ${x}, ${y})`);
     }
 
     transpileDrawLine(block, blocks) {
@@ -1508,7 +1198,9 @@
       const y2 = this.getInputValue(block, "Y2", blocks);
 
       this.addComment(`Draw line from (${x1}, ${y1}) to (${x2}, ${y2})`);
-      this.addLine(`UI_DRAW(LINE, 0, ${x1}, ${y1}, ${x2}, ${y2})`);
+      this.addLine(
+        `UI_DRAW(${this.UI_DRAW.LINE}, 0, ${x1}, ${y1}, ${x2}, ${y2})`,
+      );
     }
 
     transpileDrawCircle(block, blocks) {
@@ -1518,7 +1210,7 @@
       const fill = this.getInputValue(block, "FILL", blocks);
 
       const fillMode = fill === '"filled"' || fill === "filled";
-      const drawCmd = fillMode ? "FILLCIRCLE" : "CIRCLE";
+      const drawCmd = fillMode ? this.UI_DRAW.FILLCIRCLE : this.UI_DRAW.CIRCLE;
 
       this.addComment(`Draw circle at (${x}, ${y}) radius ${r}`);
       this.addLine(`UI_DRAW(${drawCmd}, 0, ${x}, ${y}, ${r})`);
@@ -1532,7 +1224,7 @@
       const fill = this.getInputValue(block, "FILL", blocks);
 
       const fillMode = fill === '"filled"' || fill === "filled";
-      const drawCmd = fillMode ? "FILLRECT" : "RECT";
+      const drawCmd = fillMode ? this.UI_DRAW.FILLRECT : this.UI_DRAW.RECT;
 
       this.addComment(`Draw rectangle at (${x}, ${y}) size ${w}x${h}`);
       this.addLine(`UI_DRAW(${drawCmd}, 0, ${x}, ${y}, ${w}, ${h})`);
@@ -1540,12 +1232,12 @@
 
     transpileScreenUpdate(block, blocks) {
       this.addComment("Update screen");
-      this.addLine(`UI_DRAW(UPDATE)`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.UPDATE})`);
     }
 
     transpileScreenInvert(block, blocks) {
       this.addComment("Invert screen");
-      this.addLine(`UI_DRAW(INVERSERECT, 0, 0, 0, 178, 128)`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.INVERSERECT}, 0, 0, 0, 178, 128)`);
     }
 
     // ============================================================================
@@ -1557,22 +1249,14 @@
       const duration = this.getInputValue(block, "DURATION", blocks);
 
       this.addComment(`Play tone ${freq} Hz for ${duration} ms`);
-
-      // Validate frequency (EV3 cannot synthesize tones below 250 Hz)
-      const skipLabel = this.generateLabel("SKIP_TONE");
-
       this.addLine(`MOVE16_16(${freq}, frequency)`);
-      this.addLine(`JR_LT16(frequency, 250, ${skipLabel})`);
-
       this.addLine(`MOVE16_16(${duration}, duration)`);
-      this.addLine(`SOUND(TONE, 100, frequency, duration)`);
+      this.addLine(`SOUND(${this.SOUND_CMD.TONE}, 100, frequency, duration)`);
 
       // Wait for sound to finish
       const timerVar = this.getOrCreateTimer(0);
       this.addLine(`TIMER_WAIT(duration, ${timerVar})`);
       this.addLine(`TIMER_READY(${timerVar})`);
-
-      this.addLine(`${skipLabel}:`);
     }
 
     transpilePlayNote(block, blocks) {
@@ -1591,33 +1275,15 @@
         '"A4"': 440,
         '"B4"': 494,
         '"C5"': 523,
-        C4: 262,
-        D4: 294,
-        E4: 330,
-        F4: 349,
-        G4: 392,
-        A4: 440,
-        B4: 494,
-        C5: 523,
-        "'C4'": 262,
-        "'D4'": 294,
-        "'E4'": 330,
-        "'F4'": 349,
-        "'G4'": 392,
-        "'A4'": 440,
-        "'B4'": 494,
-        "'C5'": 523,
       };
 
       const freq = noteToFreq[note] || 440;
-
-      // Calculate duration * 500 (assuming 120 BPM, quarter = 500ms)
-      const timeMs = this.evaluateExpression(duration, "*", 500, 32);
+      const timeMs = `(${duration} * 500)`; // Assuming 120 BPM, quarter = 500ms
 
       this.addLine(`MOVE16_16(${freq}, frequency)`);
       this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
-      this.addLine(`MOVE32_16(time_ms, duration)`);
-      this.addLine(`SOUND(TONE, 100, frequency, duration)`);
+      this.addLine(`MOVE16_32(time_ms, duration)`); // Convert to DATA16
+      this.addLine(`SOUND(${this.SOUND_CMD.TONE}, 100, frequency, duration)`);
 
       const timerVar = this.getOrCreateTimer(0);
       this.addLine(`TIMER_WAIT(duration, ${timerVar})`);
@@ -1626,7 +1292,7 @@
 
     transpileBeep(block, blocks) {
       this.addComment("Beep");
-      this.addLine(`SOUND(TONE, 100, 1000, 100)`);
+      this.addLine(`SOUND(${this.SOUND_CMD.TONE}, 100, 1000, 100)`);
 
       const timerVar = this.getOrCreateTimer(0);
       this.addLine(`TIMER_WAIT(100, ${timerVar})`);
@@ -1637,13 +1303,14 @@
       const volume = this.getInputValue(block, "VOLUME", blocks);
 
       this.addComment(`Set volume to ${volume}%`);
-      this.addLine(`MOVE8_8(${volume}, volume)`);
-      this.addLine(`UI_WRITE(SET_VOLUME, volume)`);
+      // LMS doesn't have direct volume control in all versions
+      // This is a placeholder
+      this.addComment("NOTE: Volume control may not be available");
     }
 
     transpileStopSound(block, blocks) {
       this.addComment("Stop all sounds");
-      this.addLine(`SOUND(BREAK)`);
+      this.addLine(`SOUND(${this.SOUND_CMD.BREAK})`);
     }
 
     transpilePlaySound(block, blocks) {
@@ -1651,7 +1318,7 @@
       this.addComment(
         "NOTE: Sound file playback requires file name - using beep instead",
       );
-      this.addLine(`SOUND(TONE, 100, 1000, 200)`);
+      this.addLine(`SOUND(${this.SOUND_CMD.TONE}, 100, 1000, 200)`);
     }
 
     // ============================================================================
@@ -1685,342 +1352,6 @@
     }
 
     // ============================================================================
-    // BUTTON TRANSPILERS
-    // ============================================================================
-
-    transpileButtonPressed(block, blocks) {
-      const button = this.getInputValue(block, "BUTTON", blocks);
-      const resultVar = this.allocateVariable(8, "button_pressed");
-
-      const buttonMap = {
-        '"up"': this.BUTTONS.UP,
-        '"down"': this.BUTTONS.DOWN,
-        '"left"': this.BUTTONS.LEFT,
-        '"right"': this.BUTTONS.RIGHT,
-        '"enter"': this.BUTTONS.ENTER,
-        '"back"': this.BUTTONS.BACK,
-        up: this.BUTTONS.UP,
-        down: this.BUTTONS.DOWN,
-        left: this.BUTTONS.LEFT,
-        right: this.BUTTONS.RIGHT,
-        enter: this.BUTTONS.ENTER,
-        back: this.BUTTONS.BACK,
-      };
-
-      const buttonConst = buttonMap[button] || this.BUTTONS.ENTER;
-
-      this.addComment(`Check if button ${button} is pressed`);
-      this.addLine(`UI_BUTTON(PRESSED, ${buttonConst}, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileWaitForButton(block, blocks) {
-      const button = this.getInputValue(block, "BUTTON", blocks);
-
-      this.addComment(`Wait for button ${button}`);
-      this.addLine(`UI_BUTTON(WAIT_FOR_PRESS)`);
-      this.addLine(`UI_BUTTON(FLUSH)`); // Clear button state
-    }
-
-    // ============================================================================
-    // SENSOR TRANSPILERS
-    // ============================================================================
-
-    transpileTouchSensor(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "touch_val");
-
-      this.addComment(`Read touch sensor on port ${port}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_TOUCH}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.TOUCH}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileTouchSensorBumped(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "touch_bump");
-
-      this.addComment(`Read touch sensor bumped on port ${port}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_TOUCH}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.BUMP}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileColorSensor(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const mode = this.getInputValue(block, "MODE", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "color_val");
-
-      const modeMap = {
-        '"reflected"': this.SENSOR_MODE.COLOR_REFLECTED,
-        '"ambient"': this.SENSOR_MODE.COLOR_AMBIENT,
-        '"color"': this.SENSOR_MODE.COLOR_COLOR,
-        '"raw"': this.SENSOR_MODE.COLOR_REFLECTED_RAW,
-        reflected: this.SENSOR_MODE.COLOR_REFLECTED,
-        ambient: this.SENSOR_MODE.COLOR_AMBIENT,
-        color: this.SENSOR_MODE.COLOR_COLOR,
-        raw: this.SENSOR_MODE.COLOR_REFLECTED_RAW,
-      };
-
-      const sensorMode = modeMap[mode] || this.SENSOR_MODE.COLOR_REFLECTED;
-
-      this.addComment(`Read color sensor on port ${port} mode ${mode}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_COLOR}, type)`);
-      this.addLine(`MOVE8_8(${sensorMode}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileColorSensorRGB(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const component = this.getInputValue(block, "COMPONENT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(16, "rgb_component");
-
-      this.addComment(
-        `Read color sensor RGB on port ${port} component ${component}`,
-      );
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_COLOR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.COLOR_RGB_RAW}, mode)`);
-
-      // RGB mode returns 3 values - need array
-      const arrayName = `rgb_array_${this.arrayCounter++}`;
-      this.addLine(`DATA16 ${arrayName}[3]`);
-      this.addLine(`INPUT_READSI(0, port, type, mode, 3, ${arrayName})`);
-
-      // Get specific component (0=R, 1=G, 2=B)
-      const componentMap = {
-        '"red"': 0,
-        '"green"': 1,
-        '"blue"': 2,
-        red: 0,
-        green: 1,
-        blue: 2,
-      };
-      const index = componentMap[component] || 0;
-
-      this.addLine(`ARRAY_READ(${arrayName}, ${index}, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileUltrasonicSensor(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const unit = this.getInputValue(block, "UNIT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(16, "us_dist");
-
-      const modeMap = {
-        '"cm"': this.SENSOR_MODE.US_DIST_CM,
-        '"inch"': this.SENSOR_MODE.US_DIST_IN,
-        '"cm_si"': this.SENSOR_MODE.US_SI_CM,
-        '"inch_si"': this.SENSOR_MODE.US_SI_IN,
-        cm: this.SENSOR_MODE.US_DIST_CM,
-        inch: this.SENSOR_MODE.US_DIST_IN,
-        cm_si: this.SENSOR_MODE.US_SI_CM,
-        inch_si: this.SENSOR_MODE.US_SI_IN,
-      };
-
-      const sensorMode = modeMap[unit] || this.SENSOR_MODE.US_DIST_CM;
-
-      this.addComment(`Read ultrasonic sensor on port ${port} unit ${unit}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_ULTRASONIC}, type)`);
-      this.addLine(`MOVE8_8(${sensorMode}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileUltrasonicListen(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "us_listen");
-
-      this.addComment(`Ultrasonic sensor listen on port ${port}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_ULTRASONIC}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.US_LISTEN}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileGyroSensor(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const mode = this.getInputValue(block, "MODE", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(16, "gyro_val");
-
-      const modeMap = {
-        '"angle"': this.SENSOR_MODE.GYRO_ANGLE,
-        '"rate"': this.SENSOR_MODE.GYRO_RATE,
-        '"fast"': this.SENSOR_MODE.GYRO_FAS,
-        '"angle_rate"': this.SENSOR_MODE.GYRO_G_AND_A,
-        angle: this.SENSOR_MODE.GYRO_ANGLE,
-        rate: this.SENSOR_MODE.GYRO_RATE,
-        fast: this.SENSOR_MODE.GYRO_FAS,
-        angle_rate: this.SENSOR_MODE.GYRO_G_AND_A,
-      };
-
-      const sensorMode = modeMap[mode] || this.SENSOR_MODE.GYRO_ANGLE;
-
-      this.addComment(`Read gyro sensor on port ${port} mode ${mode}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_GYRO}, type)`);
-      this.addLine(`MOVE8_8(${sensorMode}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileGyroReset(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-
-      this.addComment(`Reset/calibrate gyro sensor on port ${port}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_GYRO}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.GYRO_CALIBRATE}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, sensor_value8)`);
-    }
-
-    transpileIRProximity(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "ir_prox");
-
-      this.addComment(`Read IR proximity on port ${port}`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_IR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.IR_PROX}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileIRBeaconHeading(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const channel = this.getInputValue(block, "CHANNEL", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "ir_heading");
-
-      this.addComment(
-        `Read IR beacon heading on port ${port} channel ${channel}`,
-      );
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_IR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.IR_SEEK}, mode)`);
-
-      // Seeker mode returns 8 values (heading & distance for 4 channels)
-      const arrayName = `ir_seek_${this.arrayCounter++}`;
-      this.addLine(`DATA8 ${arrayName}[8]`);
-      this.addLine(`INPUT_READSI(0, port, type, mode, 8, ${arrayName})`);
-
-      // Heading is at index (channel-1)*2
-      const headingIndex = `((${channel} - 1) * 2)`;
-      this.addLine(`ARRAY_READ(${arrayName}, ${headingIndex}, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileIRBeaconDistance(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const channel = this.getInputValue(block, "CHANNEL", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "ir_distance");
-
-      this.addComment(
-        `Read IR beacon distance on port ${port} channel ${channel}`,
-      );
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_IR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.IR_SEEK}, mode)`);
-
-      // Seeker mode returns 8 values (heading & distance for 4 channels)
-      const arrayName = `ir_seek_${this.arrayCounter++}`;
-      this.addLine(`DATA8 ${arrayName}[8]`);
-      this.addLine(`INPUT_READSI(0, port, type, mode, 8, ${arrayName})`);
-
-      // Distance is at index (channel-1)*2 + 1
-      const distanceIndex = `((${channel} - 1) * 2 + 1)`;
-      this.addLine(`ARRAY_READ(${arrayName}, ${distanceIndex}, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileIRRemoteButton(block, blocks) {
-      const port = this.getInputValue(block, "PORT", blocks);
-      const channel = this.getInputValue(block, "CHANNEL", blocks);
-      const button = this.getInputValue(block, "BUTTON", blocks);
-      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
-      const resultVar = this.allocateVariable(8, "ir_button");
-
-      this.addComment(
-        `Check IR remote button on port ${port} channel ${channel} button ${button}`,
-      );
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.EV3_IR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.IR_REMOTE}, mode)`);
-
-      // Remote mode returns 4 values (one per channel)
-      const arrayName = `ir_remote_${this.arrayCounter++}`;
-      this.addLine(`DATA8 ${arrayName}[4]`);
-      this.addLine(`INPUT_READSI(0, port, type, mode, 4, ${arrayName})`);
-
-      // Get channel value
-      const channelIndex = `(${channel} - 1)`;
-      const channelValue = this.allocateVariable(8, "ir_chan_val");
-      this.addLine(
-        `ARRAY_READ(${arrayName}, ${channelIndex}, ${channelValue})`,
-      );
-
-      // Check if specific button is pressed (button codes: 0=none, 1-11=buttons)
-      const buttonMap = {
-        '"1"': 1,
-        '"2"': 2,
-        '"3"': 3,
-        '"4"': 4,
-        '"5"': 5,
-        '"6"': 6,
-        '"7"': 7,
-        '"8"': 8,
-        '"9"': 9,
-        '"10"': 10,
-        '"11"': 11,
-        1: 1,
-        2: 2,
-        3: 3,
-        4: 4,
-        5: 5,
-        6: 6,
-        7: 7,
-        8: 8,
-        9: 9,
-        10: 10,
-        11: 11,
-      };
-      const buttonCode = buttonMap[button] || 1;
-
-      this.addLine(`CP_EQ8(${channelValue}, ${buttonCode}, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    // ============================================================================
     // CONTROL TRANSPILERS
     // ============================================================================
 
@@ -2028,10 +1359,7 @@
       const duration = this.getInputValue(block, "DURATION", blocks);
 
       this.addComment(`Wait ${duration} seconds`);
-
-      // Calculate time_ms (duration * 1000)
-      const timeMs = this.evaluateExpression(duration, "*", 1000, 32);
-      this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
+      this.addLine(`MOVE32_32(${duration} * 1000, time_ms)`);
 
       const timerVar = this.getOrCreateTimer(0);
       this.addLine(`TIMER_WAIT(time_ms, ${timerVar})`);
@@ -2042,10 +1370,7 @@
       const time = this.getInputValue(block, "TIME", blocks);
 
       this.addComment(`Wait ${time} seconds`);
-
-      // Calculate time_ms (time * 1000)
-      const timeMs = this.evaluateExpression(time, "*", 1000, 32);
-      this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
+      this.addLine(`MOVE32_32(${time} * 1000, time_ms)`);
 
       const timerVar = this.getOrCreateTimer(0);
       this.addLine(`TIMER_WAIT(time_ms, ${timerVar})`);
@@ -2200,19 +1525,16 @@
         "BROADCAST_INPUT",
         blocks,
       );
-      const broadcastName = broadcastInput.replace(/'/g, "").replace(/"/g, "");
+      const broadcastName = broadcastInput.replace(/"/g, "");
 
       const handler = this.broadcastHandlers.get(broadcastName);
       if (handler) {
         this.addComment(`Broadcast: ${broadcastName}`);
+        // In LMS, we'd need to use CALL for subcalls
+        // But since we can't truly thread, we'll just call it
         this.addLine(`CALL(${handler.label})`);
       } else {
         this.addComment(`WARNING: No handler for broadcast: ${broadcastName}`);
-        this.log(
-          `WARNING: No handler for broadcast: ${broadcastName}`,
-          null,
-          "WARN",
-        );
       }
     }
 
@@ -2233,12 +1555,8 @@
       // Use tank drive on B & C
       const ports = `(${this.OUTPUT_PORTS.B} | ${this.OUTPUT_PORTS.C})`;
       this.addLine(`MOVE8_8(${ports}, ports)`);
-
-      // Calculate steps * 10
-      const scaledSteps = this.evaluateExpression(steps, "*", 10, 32);
-      this.addLine(`MOVE32_32(${scaledSteps}, degrees)`);
-
-      this.addLine(`OUTPUT_STEP_POWER(0, ports, 50, 10, degrees, 10, 1)`);
+      this.addLine(`MOVE32_32(${steps} * 10, degrees)`); // Scale steps to degrees
+      this.addLine(`OUTPUT_STEP_POWER(layer, ports, 50, 0, degrees, 0, 1)`);
     }
 
     transpileTurnRight(block, blocks) {
@@ -2247,14 +1565,11 @@
       this.addComment(`Turn right ${degrees} degrees`);
 
       // Left motor forward, right motor backward
-      // Calculate degrees * 2
-      const scaledDegrees = this.evaluateExpression(degrees, "*", 2, 32);
-      this.addLine(`MOVE32_32(${scaledDegrees}, degrees)`);
-
+      this.addLine(`MOVE32_32(${degrees} * 2, degrees)`); // Scale for robot geometry
       this.addLine(`MOVE8_8(${this.OUTPUT_PORTS.B}, port)`);
-      this.addLine(`OUTPUT_STEP_POWER(0, port, 50, 10, degrees, 10, 0)`);
+      this.addLine(`OUTPUT_STEP_POWER(layer, port, 50, 0, degrees, 0, 0)`);
       this.addLine(`MOVE8_8(${this.OUTPUT_PORTS.C}, port)`);
-      this.addLine(`OUTPUT_STEP_POWER(0, port, -50, 10, degrees, 10, 1)`);
+      this.addLine(`OUTPUT_STEP_POWER(layer, port, -50, 0, degrees, 0, 1)`);
     }
 
     transpileTurnLeft(block, blocks) {
@@ -2263,14 +1578,11 @@
       this.addComment(`Turn left ${degrees} degrees`);
 
       // Left motor backward, right motor forward
-      // Calculate degrees * 2
-      const scaledDegrees = this.evaluateExpression(degrees, "*", 2, 32);
-      this.addLine(`MOVE32_32(${scaledDegrees}, degrees)`);
-
+      this.addLine(`MOVE32_32(${degrees} * 2, degrees)`);
       this.addLine(`MOVE8_8(${this.OUTPUT_PORTS.B}, port)`);
-      this.addLine(`OUTPUT_STEP_POWER(0, port, -50, 10, degrees, 10, 0)`);
+      this.addLine(`OUTPUT_STEP_POWER(layer, port, -50, 0, degrees, 0, 0)`);
       this.addLine(`MOVE8_8(${this.OUTPUT_PORTS.C}, port)`);
-      this.addLine(`OUTPUT_STEP_POWER(0, port, 50, 10, degrees, 10, 1)`);
+      this.addLine(`OUTPUT_STEP_POWER(layer, port, 50, 0, degrees, 0, 1)`);
     }
 
     // ============================================================================
@@ -2310,71 +1622,6 @@
     }
 
     // ============================================================================
-    // TIMER TRANSPILERS
-    // ============================================================================
-
-    transpileResetTimer(block, blocks) {
-      const timer = this.getInputValue(block, "TIMER", blocks);
-      const timerVar = this.getOrCreateTimer(timer);
-
-      this.addComment(`Reset timer ${timer}`);
-      this.addLine(`MOVE32_32(0, ${timerVar})`);
-      this.addLine(`TIMER_READ(${timerVar})`); // Read to reset
-    }
-
-    transpileTimerValue(block, blocks) {
-      const timer = this.getInputValue(block, "TIMER", blocks);
-      const resultVar = this.allocateVariable(32, `timer_${timer}_val`);
-
-      const timerVar = this.getOrCreateTimer(timer);
-      this.addComment(`Read timer ${timer}`);
-      this.addLine(`TIMER_READ(${timerVar})`);
-      this.addLine(`MOVE32_32(${timerVar}, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    // ============================================================================
-    // SYSTEM TRANSPILERS
-    // ============================================================================
-
-    transpileBatteryLevel(block, blocks) {
-      const resultVar = this.allocateVariable(8, "battery_pct");
-
-      this.addComment("Read battery level");
-      this.addLine(`UI_READ(GET_LBATT, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileBatteryVoltage(block, blocks) {
-      const resultVar = this.allocateVariable("F", "battery_v");
-
-      this.addComment("Read battery voltage");
-      this.addLine(`UI_READ(GET_VBATT, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileBatteryCurrent(block, blocks) {
-      const resultVar = this.allocateVariable("F", "battery_i");
-
-      this.addComment("Read battery current");
-      this.addLine(`UI_READ(GET_IBATT, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    transpileFreeMemory(block, blocks) {
-      const resultVar = this.allocateVariable(32, "free_mem");
-
-      this.addComment("Read free memory");
-      this.addLine(`INFO(GET_FREE, ${resultVar})`);
-
-      return resultVar;
-    }
-
-    // ============================================================================
     // LOOKS TRANSPILERS
     // ============================================================================
 
@@ -2383,21 +1630,15 @@
 
       this.addComment(`Say: ${message}`);
       // Display on screen
-      this.addLine(`UI_DRAW(TEXT, 0, 0, 50, ${message})`);
-      this.addLine(`UI_DRAW(UPDATE)`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.TEXT}, 0, 0, 50, ${message})`);
+      this.addLine(`UI_DRAW(${this.UI_DRAW.UPDATE})`);
 
       if (block.opcode === "looks_sayforsecs") {
         const secs = this.getInputValue(block, "SECS", blocks);
-
-        // Calculate secs * 1000
-        const timeMs = this.evaluateExpression(secs, "*", 1000, 32);
-        this.addLine(`MOVE32_32(${timeMs}, time_ms)`);
-
+        this.addLine(`MOVE32_32(${secs} * 1000, time_ms)`);
         const timerVar = this.getOrCreateTimer(0);
         this.addLine(`TIMER_WAIT(time_ms, ${timerVar})`);
         this.addLine(`TIMER_READY(${timerVar})`);
-        this.addLine(`UI_DRAW(FILLWINDOW, 0, 0, 0)`);
-        this.addLine(`UI_DRAW(UPDATE)`);
       }
     }
 
@@ -2434,11 +1675,11 @@
           if (primitiveType >= 4 && primitiveType <= 8) {
             return String(primitiveValue);
           } else if (primitiveType === 10) {
-            // String value - use SINGLE QUOTES per documentation
+            // String value - need to handle specially for LMS
             if (typeof primitiveValue === "number") {
               return String(primitiveValue);
             }
-            return `'${primitiveValue}'`; // SINGLE QUOTES for LMS strings
+            return `"${primitiveValue}"`;
           }
         } else if (typeof inputData === "string") {
           const refBlock = blocks._blocks[inputData];
@@ -2466,94 +1707,13 @@
               if (typeof primitiveValue === "number") {
                 return String(primitiveValue);
               }
-              return `'${primitiveValue}'`; // SINGLE QUOTES for LMS strings
+              return `"${primitiveValue}"`;
             }
           }
         }
       }
 
       return "0";
-    }
-
-    /**
-     *< Evaluates arithmetic expressions at transpile time if possible
-     * Returns either a calculated value or generates LMS math operations
-     */
-    evaluateExpression(value, operation, operand, resultType = 32) {
-      // Check if value is a pure number (not a variable)
-      const numValue = parseFloat(value);
-
-      if (
-        !isNaN(numValue) &&
-        !value.includes("var") &&
-        !value.includes("timer") &&
-        !value.includes("_") &&
-        /^-?\d+\.?\d*$/.test(String(value).trim())
-      ) {
-        // It's a literal number - calculate at transpile time
-        let result;
-        switch (operation) {
-          case "*":
-            result = numValue * operand;
-            break;
-          case "/":
-            result = numValue / operand;
-            break;
-          case "+":
-            result = numValue + operand;
-            break;
-          case "-":
-            result = numValue - operand;
-            break;
-          default:
-            result = numValue;
-        }
-
-        // Return integer or float based on result type
-        if (resultType === "F" || resultType === "DATAF") {
-          return result.toFixed(1) + "F";
-        }
-        return Math.round(result).toString();
-      } else {
-        // It's a variable - generate LMS math operations
-        const resultVar = this.allocateVariable(resultType, `calc_result`);
-        const operandConst = operand.toString();
-
-        switch (operation) {
-          case "*":
-            if (resultType === 32) {
-              this.addLine(`MUL32(${value}, ${operandConst}, ${resultVar})`);
-            } else if (resultType === 16) {
-              this.addLine(`MUL16(${value}, ${operandConst}, ${resultVar})`);
-            } else if (resultType === "F") {
-              this.addLine(`MULF(${value}, ${operandConst}, ${resultVar})`);
-            }
-            break;
-          case "/":
-            if (resultType === 32) {
-              this.addLine(`DIV32(${value}, ${operandConst}, ${resultVar})`);
-            } else if (resultType === 16) {
-              this.addLine(`DIV16(${value}, ${operandConst}, ${resultVar})`);
-            }
-            break;
-          case "+":
-            if (resultType === 32) {
-              this.addLine(`ADD32(${value}, ${operandConst}, ${resultVar})`);
-            } else if (resultType === 16) {
-              this.addLine(`ADD16(${value}, ${operandConst}, ${resultVar})`);
-            }
-            break;
-          case "-":
-            if (resultType === 32) {
-              this.addLine(`SUB32(${value}, ${operandConst}, ${resultVar})`);
-            } else if (resultType === 16) {
-              this.addLine(`SUB16(${value}, ${operandConst}, ${resultVar})`);
-            }
-            break;
-        }
-
-        return resultVar;
-      }
     }
 
     evaluateBlock(block, blocks) {
@@ -2576,7 +1736,7 @@
         if (typeof text === "number" || !isNaN(text)) {
           return String(text);
         }
-        return `'${text || ""}'`; // SINGLE QUOTES for LMS strings
+        return `"${text || ""}"`;
       }
 
       // Variable blocks
@@ -2602,7 +1762,7 @@
       } else if (opcode === "operator_divide") {
         return this.evaluateBinaryOp(block, blocks, "DIV32");
       } else if (opcode === "operator_mod") {
-        // LMS: a mod b = a - (a/b)*b
+        // LMS doesn't have MOD, use math: a - (a/b)*b
         const num1 = this.getInputValue(block, "NUM1", blocks);
         const num2 = this.getInputValue(block, "NUM2", blocks);
         const tempDiv = this.allocateVariable(32);
@@ -2613,63 +1773,35 @@
         this.addLine(`SUB32(${num1}, ${tempMul}, ${resultVar})`);
         return resultVar;
       } else if (opcode === "operator_round") {
+        // Round not directly available, approximate
         const num = this.getInputValue(block, "NUM", blocks);
-        const resultVar = this.allocateVariable("F");
-        this.addLine(`MATH(ROUND, ${num}, ${resultVar})`);
-        return resultVar;
+        return num; // Simplified
       } else if (opcode === "operator_mathop") {
-        const operator = this.getFieldValue(block, "OPERATOR");
+        // Math operations like sqrt, sin, cos, etc.
+        // LMS has limited math - we'll return the input for now
         const num = this.getInputValue(block, "NUM", blocks);
-        const resultVar = this.allocateVariable("F");
-
-        const mathFuncMap = {
-          abs: "ABS",
-          floor: "FLOOR",
-          ceiling: "CEIL",
-          sqrt: "SQRT",
-          sin: "SIN",
-          cos: "COS",
-          tan: "TAN",
-          asin: "ASIN",
-          acos: "ACOS",
-          atan: "ATAN",
-          ln: "LN",
-          log: "LOG",
-          "e ^": "EXP",
-          "10 ^": "POW", // Special case
-        };
-
-        const mathFunc = mathFuncMap[operator];
-        if (mathFunc === "POW") {
-          this.addLine(`MATH(POW, 10, ${num}, ${resultVar})`);
-        } else if (mathFunc) {
-          this.addLine(`MATH(${mathFunc}, ${num}, ${resultVar})`);
-        } else {
-          this.log(
-            `WARNING: Unsupported math operation: ${operator}`,
-            null,
-            "WARN",
-          );
-          return num;
-        }
-        return resultVar;
+        this.addComment("WARNING: Math operation not fully supported");
+        return num;
       }
 
       // String operators
       else if (opcode === "operator_join") {
         // String concatenation not directly supported in LMS
+        // Return first string
         const str1 = this.getInputValue(block, "STRING1", blocks);
-        this.log("WARNING: String join not fully supported", null, "WARN");
+        this.addComment("WARNING: String join not fully supported");
         return str1;
       } else if (opcode === "operator_letter_of") {
-        this.log("WARNING: String indexing not supported", null, "WARN");
-        return "''";
+        // String indexing not supported
+        this.addComment("WARNING: String indexing not supported");
+        return '""';
       } else if (opcode === "operator_length") {
-        this.log("WARNING: String length not supported", null, "WARN");
+        // String length not supported
+        this.addComment("WARNING: String length not supported");
         return "0";
       }
 
-      // Comparison operators
+      // Comparison operators - handle in evaluateCondition
       else if (
         opcode === "operator_gt" ||
         opcode === "operator_lt" ||
@@ -2684,69 +1816,21 @@
       } else if (opcode === "ev3lms_motorSpeed") {
         return this.evaluateMotorSpeed(block, blocks);
       } else if (opcode === "ev3lms_touchSensor") {
-        return this.transpileTouchSensor(block, blocks);
-      } else if (opcode === "ev3lms_touchSensorBumped") {
-        return this.transpileTouchSensorBumped(block, blocks);
-      } else if (opcode === "ev3lms_colorSensor") {
-        return this.transpileColorSensor(block, blocks);
-      } else if (opcode === "ev3lms_colorSensorRGB") {
-        return this.transpileColorSensorRGB(block, blocks);
-      } else if (opcode === "ev3lms_ultrasonicSensor") {
-        return this.transpileUltrasonicSensor(block, blocks);
-      } else if (opcode === "ev3lms_ultrasonicListen") {
-        return this.transpileUltrasonicListen(block, blocks);
-      } else if (opcode === "ev3lms_gyroSensor") {
-        return this.transpileGyroSensor(block, blocks);
-      } else if (opcode === "ev3lms_irProximity") {
-        return this.transpileIRProximity(block, blocks);
-      } else if (opcode === "ev3lms_irBeaconHeading") {
-        return this.transpileIRBeaconHeading(block, blocks);
-      } else if (opcode === "ev3lms_irBeaconDistance") {
-        return this.transpileIRBeaconDistance(block, blocks);
-      } else if (opcode === "ev3lms_irRemoteButton") {
-        return this.transpileIRRemoteButton(block, blocks);
-      } else if (opcode === "ev3lms_buttonPressed") {
-        return this.transpileButtonPressed(block, blocks);
-      } else if (opcode === "ev3lms_timerValue") {
-        return this.transpileTimerValue(block, blocks);
-      } else if (opcode === "ev3lms_batteryLevel") {
-        return this.transpileBatteryLevel(block, blocks);
-      } else if (opcode === "ev3lms_batteryVoltage") {
-        return this.transpileBatteryVoltage(block, blocks);
-      } else if (opcode === "ev3lms_batteryCurrent") {
-        return this.transpileBatteryCurrent(block, blocks);
-      } else if (opcode === "ev3lms_freeMemory") {
-        return this.transpileFreeMemory(block, blocks);
+        return this.evaluateTouchSensor(block, blocks);
       }
 
-      // Motor port menu
-        else if (opcode === "ev3lms_menu_motorPorts" || opcode === "ev3lms_motorPorts_menu") {
-        const value = this.getFieldValue(block, "motorPorts") || this.getFieldValue(block, "PORT");
-        this.log(`Motor port menu: ${value}`, null, "DEBUG");
-        return value || "A"; // Return raw port letter
-        }
-
-        // Sensor port menu
-        else if (opcode === "ev3lms_menu_sensorPorts" || opcode === "ev3lms_sensorPorts_menu") {
-        const value = this.getFieldValue(block, "sensorPorts") || this.getFieldValue(block, "PORT");
-        this.log(`Sensor port menu: ${value}`, null, "DEBUG");
-        return value || "1"; // Return raw port number
-        }
-
-        // Generic menu blocks
-        else if (opcode.endsWith("_menu") || opcode.includes("menu_")) {
+      // Menu blocks
+      else if (opcode.endsWith("_menu")) {
+        // Return the field value directly
         const fieldNames = Object.keys(block.fields);
         if (fieldNames.length > 0) {
-            const value = this.getFieldValue(block, fieldNames[0]);
-            this.log(`Menu block evaluated: ${opcode} = ${value}`, null, "DEBUG");
-            return `'${value}'`; // SINGLE QUOTES
+          const value = this.getFieldValue(block, fieldNames[0]);
+          return `"${value}"`;
         }
-        this.log(`Menu block ${opcode} has no fields, using empty string`, null, "DEBUG");
-        return "''";
-        }
+      }
 
       // Default
-      this.log(`WARNING: Unsupported reporter: ${opcode}`, null, "WARN");
+      this.addComment(`WARNING: Unsupported reporter: ${opcode}`);
       return "0";
     }
 
@@ -2845,36 +1929,46 @@
         const resultVar = this.allocateVariable(8);
         this.addLine(`XOR8(${cond}, 1, ${resultVar})`); // NOT via XOR with 1
         return resultVar;
+      } else if (opcode === "ev3lms_touchSensor") {
+        return this.evaluateTouchSensor(conditionBlock, blocks);
       } else {
-        // Try to evaluate as a boolean reporter
+        // Unknown condition - evaluate as boolean
         return this.evaluateBlock(conditionBlock, blocks);
       }
     }
 
     evaluateMotorPosition(block, blocks) {
       const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.getMotorAsInputPort(port);
       const resultVar = this.allocateVariable(32, "motor_pos");
 
-      this.addComment(`Read motor ${port} position`);
-      this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.LARGE_MOTOR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.MOTOR_DEGREE}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
+      this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
+      this.addLine(`OUTPUT_READ(layer, port, OUTPUT_GET_COUNT, ${resultVar})`);
 
       return resultVar;
     }
 
     evaluateMotorSpeed(block, blocks) {
       const port = this.getInputValue(block, "PORT", blocks);
-      const portNum = this.getMotorAsInputPort(port);
       const resultVar = this.allocateVariable(8, "motor_speed");
 
-      this.addComment(`Read motor ${port} speed`);
+      this.addLine(`MOVE8_8(${this.getPortMask(port)}, port)`);
+      this.addLine(`OUTPUT_READ(layer, port, OUTPUT_GET_SPEED, ${resultVar})`);
+
+      return resultVar;
+    }
+
+    evaluateTouchSensor(block, blocks) {
+      const port = this.getInputValue(block, "PORT", blocks);
+      const portNum = this.INPUT_PORTS[port.replace(/"/g, "")] || "0";
+      const resultVar = this.allocateVariable(8, "touch_val");
+
       this.addLine(`MOVE8_8(${portNum}, port)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.LARGE_MOTOR}, type)`);
-      this.addLine(`MOVE8_8(${this.SENSOR_MODE.MOTOR_SPEED}, mode)`);
-      this.addLine(`INPUT_READ(0, port, type, mode, ${resultVar})`);
+      this.addLine(`MOVE8_8(${this.SENSOR_TYPE.TOUCH}, type)`);
+      this.addLine(`MOVE8_8(${this.SENSOR_MODE.TOUCH}, mode)`);
+      this.addLine(
+        `INPUT_DEVICE(READY_SI, layer, port, type, mode, 1, sensor_value8)`,
+      );
+      this.addLine(`MOVE8_8(sensor_value8, ${resultVar})`);
 
       return resultVar;
     }
@@ -2903,15 +1997,8 @@
     }
 
     getPortMask(port) {
-      const portStr = String(port).replace(/'/g, "").replace(/"/g, "");
+      const portStr = String(port).replace(/"/g, "");
       return this.OUTPUT_PORTS[portStr] || this.OUTPUT_PORTS.A;
-    }
-
-    getMotorAsInputPort(port) {
-      // Convert motor port (A-D) to input port number (0-3)
-      const portStr = String(port).replace(/'/g, "").replace(/"/g, "");
-      const portMap = { A: "0", B: "1", C: "2", D: "3" };
-      return portMap[portStr] || "0";
     }
 
     getOrCreateTimer(timerId) {
@@ -2956,20 +2043,17 @@
 
       this.log("Extension initialized", {
         lang: currentLang,
-        version: "2.1.0",
+        version: "2.0.0",
       });
     }
 
-    log(message, data = null, level = "INFO") {
+    log(message, data = null) {
       const timestamp = new Date().toISOString();
-      const logEntry = `[${timestamp}] [EV3-LMS-${level}] ${message}`;
-
-      if (level === "ERROR") {
-        console.error(logEntry, data || "");
-      } else if (level === "WARN") {
-        console.warn(logEntry, data || "");
+      const logEntry = `[${timestamp}] [EV3-LMS] ${message}`;
+      if (data !== null) {
+        console.log(logEntry, data);
       } else {
-        console.log(logEntry, data || "");
+        console.log(logEntry);
       }
     }
 
@@ -3070,16 +2154,6 @@
             blockType: Scratch.BlockType.COMMAND,
             text: t("downloadRBF"),
           },
-          {
-            opcode: "showDebugLog",
-            blockType: Scratch.BlockType.COMMAND,
-            text: "show transpilation diagnostics",
-          },
-          {
-            opcode: "testDiagnostics",
-            blockType: Scratch.BlockType.COMMAND,
-            text: "🔧 Show full transpilation diagnostics",
-            },
 
           "---",
 
@@ -3145,18 +2219,6 @@
             },
           },
           {
-            opcode: "motorPolarity",
-            blockType: Scratch.BlockType.COMMAND,
-            text: t("motorPolarity"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "motorPorts" },
-              POLARITY: {
-                type: Scratch.ArgumentType.STRING,
-                menu: "motorPolarity",
-              },
-            },
-          },
-          {
             opcode: "tankDrive",
             blockType: Scratch.BlockType.COMMAND,
             text: t("tankDrive"),
@@ -3192,156 +2254,6 @@
             text: t("motorSpeed"),
             arguments: {
               PORT: { type: Scratch.ArgumentType.STRING, menu: "motorPorts" },
-            },
-          },
-
-          "---",
-
-          // Sensors
-          {
-            blockType: Scratch.BlockType.LABEL,
-            text: t("sensors"),
-          },
-          {
-            opcode: "touchSensor",
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: t("touchSensor"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-            },
-          },
-          {
-            opcode: "touchSensorBumped",
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: t("touchSensorBumped"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-            },
-          },
-          {
-            opcode: "colorSensor",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("colorSensor"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              MODE: { type: Scratch.ArgumentType.STRING, menu: "colorModes" },
-            },
-          },
-          {
-            opcode: "colorSensorRGB",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("colorSensorRGB"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              COMPONENT: {
-                type: Scratch.ArgumentType.STRING,
-                menu: "rgbComponents",
-              },
-            },
-          },
-          {
-            opcode: "ultrasonicSensor",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("ultrasonicSensor"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              UNIT: {
-                type: Scratch.ArgumentType.STRING,
-                menu: "distanceUnits",
-              },
-            },
-          },
-          {
-            opcode: "ultrasonicListen",
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: t("ultrasonicListen"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-            },
-          },
-          {
-            opcode: "gyroSensor",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("gyroSensor"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              MODE: { type: Scratch.ArgumentType.STRING, menu: "gyroModes" },
-            },
-          },
-          {
-            opcode: "gyroReset",
-            blockType: Scratch.BlockType.COMMAND,
-            text: t("gyroReset"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-            },
-          },
-
-          "---",
-
-          // Infrared
-          {
-            blockType: Scratch.BlockType.LABEL,
-            text: t("infrared"),
-          },
-          {
-            opcode: "irProximity",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("irProximity"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-            },
-          },
-          {
-            opcode: "irBeaconHeading",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("irBeaconHeading"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              CHANNEL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
-            },
-          },
-          {
-            opcode: "irBeaconDistance",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("irBeaconDistance"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              CHANNEL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
-            },
-          },
-          {
-            opcode: "irRemoteButton",
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: t("irRemoteButton"),
-            arguments: {
-              PORT: { type: Scratch.ArgumentType.STRING, menu: "sensorPorts" },
-              CHANNEL: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
-              BUTTON: { type: Scratch.ArgumentType.STRING, menu: "irButtons" },
-            },
-          },
-
-          "---",
-
-          // Buttons
-          {
-            blockType: Scratch.BlockType.LABEL,
-            text: t("buttons"),
-          },
-          {
-            opcode: "buttonPressed",
-            blockType: Scratch.BlockType.BOOLEAN,
-            text: t("buttonPressed"),
-            arguments: {
-              BUTTON: { type: Scratch.ArgumentType.STRING, menu: "buttons" },
-            },
-          },
-          {
-            opcode: "waitForButton",
-            blockType: Scratch.BlockType.COMMAND,
-            text: t("waitForButton"),
-            arguments: {
-              BUTTON: { type: Scratch.ArgumentType.STRING, menu: "buttons" },
             },
           },
 
@@ -3479,11 +2391,6 @@
             },
           },
           {
-            opcode: "getVolume",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("getVolume"),
-          },
-          {
             opcode: "stopSound",
             blockType: Scratch.BlockType.COMMAND,
             text: t("stopSound"),
@@ -3512,54 +2419,10 @@
 
           "---",
 
-          // System
-          {
-            blockType: Scratch.BlockType.LABEL,
-            text: t("system"),
-          },
-          {
-            opcode: "batteryLevel",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("batteryLevel"),
-          },
-          {
-            opcode: "batteryCurrent",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("batteryCurrent"),
-          },
-          {
-            opcode: "batteryVoltage",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("batteryVoltage"),
-          },
-          {
-            opcode: "freeMemory",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("freeMemory"),
-          },
-
-          "---",
-
           // Timers
           {
             blockType: Scratch.BlockType.LABEL,
             text: t("timers"),
-          },
-          {
-            opcode: "resetTimer",
-            blockType: Scratch.BlockType.COMMAND,
-            text: t("resetTimer"),
-            arguments: {
-              TIMER: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
-            },
-          },
-          {
-            opcode: "timerValue",
-            blockType: Scratch.BlockType.REPORTER,
-            text: t("timerValue"),
-            arguments: {
-              TIMER: { type: Scratch.ArgumentType.NUMBER, defaultValue: 1 },
-            },
           },
           {
             opcode: "waitSeconds",
@@ -3590,13 +2453,6 @@
           brakeMode: {
             items: ["brake", "coast"],
           },
-          motorPolarity: {
-            items: [
-              { text: "forward (+1)", value: "1" },
-              { text: "reverse (-1)", value: "-1" },
-              { text: "toggle (0)", value: "0" },
-            ],
-          },
           driveUnit: {
             items: ["seconds", "rotations", "degrees"],
           },
@@ -3608,24 +2464,6 @@
           },
           notes: {
             items: ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"],
-          },
-          buttons: {
-            items: ["up", "down", "left", "right", "enter", "back"],
-          },
-          colorModes: {
-            items: ["reflected", "ambient", "color", "raw"],
-          },
-          rgbComponents: {
-            items: ["red", "green", "blue"],
-          },
-          distanceUnits: {
-            items: ["cm", "inch"],
-          },
-          gyroModes: {
-            items: ["angle", "rate", "fast", "angle_rate"],
-          },
-          irButtons: {
-            items: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
           },
         },
       };
@@ -3672,19 +2510,11 @@
           this.log("EV3 connection test successful");
           return t("connected");
         } else {
-          this.log(
-            "EV3 connection test failed",
-            { status: response.status },
-            "WARN",
-          );
+          this.log("EV3 connection test failed", { status: response.status });
           return t("notConnected");
         }
       } catch (error) {
-        this.log(
-          "EV3 connection test error",
-          { error: error.message },
-          "ERROR",
-        );
+        this.log("EV3 connection test error", { error: error.message });
         return t("notConnected");
       }
     }
@@ -3702,19 +2532,13 @@
           this.log("Compiler connection test successful");
           return t("connected");
         } else {
-          this.log(
-            "Compiler connection test failed",
-            { status: response.status },
-            "WARN",
-          );
+          this.log("Compiler connection test failed", {
+            status: response.status,
+          });
           return t("notConnected");
         }
       } catch (error) {
-        this.log(
-          "Compiler connection test error",
-          { error: error.message },
-          "ERROR",
-        );
+        this.log("Compiler connection test error", { error: error.message });
         return t("notConnected");
       }
     }
@@ -3728,70 +2552,15 @@
         this.lmsCode = this.transpiler.transpile();
         this.log("LMS transpilation complete", {
           length: this.lmsCode.length,
-          errors: this.transpiler.errors.length,
-          warnings: this.transpiler.warnings.length,
         });
-
-        let message = "✅ LMS code generated!";
-
-        // Add errors with details
-        if (this.transpiler.errors.length > 0) {
-          message += `\n\n❌ ${this.transpiler.errors.length} ERROR(S):\n`;
-          message += this.transpiler.errors
-            .map((err, i) => `${i + 1}. ${err.message}`)
-            .join("\n");
-        }
-
-        // Add warnings with details
-        if (this.transpiler.warnings.length > 0) {
-          message += `\n\n⚠️ ${this.transpiler.warnings.length} WARNING(S):\n`;
-          message += this.transpiler.warnings
-            .map((warn, i) => `${i + 1}. ${warn.message}`)
-            .join("\n");
-        }
-
-        // Show modal instead of alert if there are errors/warnings
-        if (
-          this.transpiler.errors.length > 0 ||
-          this.transpiler.warnings.length > 0
-        ) {
-          this.showDiagnosticsModal(message);
-        } else {
-          alert(message);
-        }
+        alert("✅ " + t("generateFirst").replace("first", "complete"));
       } catch (error) {
-        this.log(
-          "Transpilation error",
-          {
-            error: error.message,
-            stack: error.stack,
-          },
-          "ERROR",
-        );
+        this.log("Transpilation error", {
+          error: error.message,
+          stack: error.stack,
+        });
         alert("❌ Transpilation failed:\n" + error.message);
       }
-    }
-
-    testDiagnostics() {
-        console.log("Test diagnostics called");
-        console.log("Transpiler exists:", !!this.transpiler);
-        console.log("Errors:", this.transpiler?.errors);
-        console.log("Warnings:", this.transpiler?.warnings);
-        console.log("showFullDiagnostics method exists:", typeof this.showFullDiagnostics);
-        
-        if (typeof this.showFullDiagnostics === 'function') {
-            this.showFullDiagnostics();
-        } else {
-            alert("showFullDiagnostics method not found!");
-        }
-        }
-
-    showDebugLog() {
-      if (!this.lmsCode) {
-        alert("No code has been generated yet. Generate LMS code first.");
-        return;
-      }
-      this.showFullDiagnostics();
     }
 
     showLMSCode() {
@@ -3811,180 +2580,6 @@
 
       this.downloadFile("program.lms", this.lmsCode, "text/plain");
       alert(t("downloaded") + " program.lms");
-    }
-
-    showFullDiagnostics() {
-  console.log("showFullDiagnostics called"); // Debug log
-  
-  let fullReport = "=== TRANSPILATION DIAGNOSTICS ===\n\n";
-  
-  fullReport += `Generated Code Length: ${this.lmsCode.length} characters\n`;
-  fullReport += `Total Lines: ${this.lmsCode.split('\n').length}\n`;
-  fullReport += `Errors: ${this.transpiler.errors.length}\n`;
-  fullReport += `Warnings: ${this.transpiler.warnings.length}\n\n`;
-  
-  if (this.transpiler.errors.length > 0) {
-    fullReport += "=== ERRORS ===\n";
-    this.transpiler.errors.forEach((err, i) => {
-      fullReport += `\nError ${i + 1}:\n`;
-      fullReport += `  Time: ${err.timestamp}\n`;
-      fullReport += `  Message: ${err.message}\n`;
-      if (err.data) {
-        fullReport += `  Details: ${JSON.stringify(err.data, null, 2)}\n`;
-      }
-    });
-    fullReport += "\n";
-  }
-  
-  if (this.transpiler.warnings.length > 0) {
-    fullReport += "=== WARNINGS ===\n";
-    this.transpiler.warnings.forEach((warn, i) => {
-      fullReport += `\nWarning ${i + 1}:\n`;
-      fullReport += `  Time: ${warn.timestamp}\n`;
-      fullReport += `  Message: ${warn.message}\n`;
-      if (warn.data) {
-        fullReport += `  Details: ${JSON.stringify(warn.data, null, 2)}\n`;
-      }
-    });
-    fullReport += "\n";
-  }
-  
-  if (this.transpiler.debugLog && this.transpiler.debugLog.length > 0) {
-    fullReport += "=== DEBUG LOG (Last 100 entries) ===\n";
-    const recentLogs = this.transpiler.debugLog.slice(-100);
-    recentLogs.forEach((log) => {
-      fullReport += `[${log.timestamp}] [${log.level}] ${log.message}\n`;
-      if (log.data) {
-        fullReport += `  Data: ${JSON.stringify(log.data)}\n`;
-      }
-    });
-  } else {
-    fullReport += "=== DEBUG LOG ===\nNo debug entries available.\n";
-  }
-  
-  console.log("Full report generated:", fullReport.substring(0, 200) + "..."); // Debug
-  this.showModal("Full Diagnostic Report", fullReport);
-}
-
-    showDiagnosticsModal(message) {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 25px;
-    border: 3px solid #7C3A9A;
-    border-radius: 10px;
-    max-width: 700px;
-    max-height: 80%;
-    overflow: auto;
-    z-index: 10000;
-    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-    color: black;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  `;
-
-  const titleEl = document.createElement("h3");
-  titleEl.textContent = "Transpilation Results";
-  titleEl.style.cssText = "margin-top: 0; color: #7C3A9A; font-size: 20px;";
-
-  const contentDiv = document.createElement("div");
-  contentDiv.style.cssText = `
-    background: #f9f9f9;
-    border: 1px solid #ddd;
-    padding: 15px;
-    border-radius: 5px;
-    max-height: 400px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-  `;
-  
-  // Format the message with colors
-  const formattedMessage = message
-    .replace(/✅/g, '<span style="color: green; font-weight: bold;">✅</span>')
-    .replace(/❌/g, '<span style="color: red; font-weight: bold;">❌</span>')
-    .replace(/⚠️/g, '<span style="color: orange; font-weight: bold;">⚠️</span>')
-    .replace(/ERROR\(S\):/g, '<span style="color: red; font-weight: bold;">ERROR(S):</span>')
-    .replace(/WARNING\(S\):/g, '<span style="color: orange; font-weight: bold;">WARNING(S):</span>');
-  
-  contentDiv.innerHTML = formattedMessage;
-
-  const buttonContainer = document.createElement("div");
-  buttonContainer.style.cssText = "margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;";
-
-  // View Details button (opens full log)
-  const detailsBtn = document.createElement("button");
-  detailsBtn.textContent = "View Full Log";
-  detailsBtn.style.cssText =
-    "padding: 10px 20px; background: #5C2A7A; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;";
-  
-  // CRITICAL: Bind 'this' context properly
-  const self = this; // Store reference to extension instance
-  detailsBtn.onclick = function() {
-    console.log("View Full Log clicked"); // Debug
-    self.showFullDiagnostics(); // Call on the correct context
-  };
-
-  // Close button
-  const closeBtn = document.createElement("button");
-  closeBtn.textContent = "Close";
-  closeBtn.style.cssText =
-    "padding: 10px 20px; background: #7C3A9A; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;";
-  closeBtn.onclick = () => {
-    console.log("Close clicked"); // Debug
-    document.body.removeChild(modal);
-  };
-
-  buttonContainer.appendChild(detailsBtn);
-  buttonContainer.appendChild(closeBtn);
-
-  modal.appendChild(titleEl);
-  modal.appendChild(contentDiv);
-  modal.appendChild(buttonContainer);
-
-  document.body.appendChild(modal);
-}
-
-    copyToClipboard(text) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard
-          .writeText(text)
-          .then(() => {
-            alert("✅ Copied to clipboard!");
-          })
-          .catch((err) => {
-            this.log(
-              "Failed to copy to clipboard",
-              { error: err.message },
-              "ERROR",
-            );
-            // Fallback method
-            this.fallbackCopyToClipboard(text);
-          });
-      } else {
-        this.fallbackCopyToClipboard(text);
-      }
-    }
-
-    fallbackCopyToClipboard(text) {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-999999px";
-      document.body.appendChild(textArea);
-      textArea.select();
-      try {
-        document.execCommand("copy");
-        alert("✅ Copied to clipboard!");
-      } catch (err) {
-        alert("❌ Failed to copy to clipboard");
-      }
-      document.body.removeChild(textArea);
     }
 
     async compileToRBF() {
@@ -4028,36 +2623,13 @@
           this.rbfBytecode = bytes;
 
           this.log("RBF bytecode stored", { size: bytes.length });
-
-          let message = t("compilationSuccess");
-          if (result.message) {
-            message += "\n\n" + result.message;
-          }
-          alert(message);
+          alert(t("compilationSuccess") + "\n\n" + result.message);
         } else {
           throw new Error(result.error || "Unknown compilation error");
         }
       } catch (error) {
-        this.log("Compilation error", { error: error.message }, "ERROR");
-
-        // Show detailed error modal instead of simple alert
-        let errorMessage = t("compilationFailed") + "\n\n";
-        errorMessage += "Error: " + error.message;
-
-        // Try to parse compiler errors if available
-        try {
-          const errorData = JSON.parse(error.message);
-          if (errorData.errors) {
-            errorMessage += "\n\nCompiler Errors:\n";
-            errorData.errors.forEach((err, i) => {
-              errorMessage += `${i + 1}. Line ${err.line || "?"}: ${err.message}\n`;
-            });
-          }
-        } catch (e) {
-          // Not JSON, just show plain message
-        }
-
-        this.showModal("Compilation Failed", errorMessage);
+        this.log("Compilation error", { error: error.message });
+        alert(t("compilationFailed") + ":\n" + error.message);
       }
     }
 
@@ -4094,272 +2666,115 @@
     // ============================================================================
 
     motorRun(args) {
-      // No-op in transpile mode
-      this.log("motorRun called (no-op in transpile mode)", args, "DEBUG");
+      // No-op in transpile mode, streaming would send command
     }
 
     motorRunTime(args) {
-      this.log("motorRunTime called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     motorRunRotations(args) {
-      this.log(
-        "motorRunRotations called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
+      // No-op
     }
 
     motorRunDegrees(args) {
-      this.log(
-        "motorRunDegrees called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
+      // No-op
     }
 
     motorStop(args) {
-      this.log("motorStop called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     motorReset(args) {
-      this.log("motorReset called (no-op in transpile mode)", args, "DEBUG");
-    }
-
-    motorPolarity(args) {
-      this.log("motorPolarity called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     tankDrive(args) {
-      this.log("tankDrive called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     steerDrive(args) {
-      this.log("steerDrive called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     motorPosition(args) {
-      this.log("motorPosition called (no-op in transpile mode)", args, "DEBUG");
-      return 0;
+      return 0; // Placeholder
     }
 
     motorSpeed(args) {
-      this.log("motorSpeed called (no-op in transpile mode)", args, "DEBUG");
-      return 0;
-    }
-
-    touchSensor(args) {
-      this.log("touchSensor called (no-op in transpile mode)", args, "DEBUG");
-      return false;
-    }
-
-    touchSensorBumped(args) {
-      this.log(
-        "touchSensorBumped called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return false;
-    }
-
-    colorSensor(args) {
-      this.log("colorSensor called (no-op in transpile mode)", args, "DEBUG");
-      return 0;
-    }
-
-    colorSensorRGB(args) {
-      this.log(
-        "colorSensorRGB called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return 0;
-    }
-
-    ultrasonicSensor(args) {
-      this.log(
-        "ultrasonicSensor called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return 0;
-    }
-
-    ultrasonicListen(args) {
-      this.log(
-        "ultrasonicListen called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return false;
-    }
-
-    gyroSensor(args) {
-      this.log("gyroSensor called (no-op in transpile mode)", args, "DEBUG");
-      return 0;
-    }
-
-    gyroReset(args) {
-      this.log("gyroReset called (no-op in transpile mode)", args, "DEBUG");
-    }
-
-    irProximity(args) {
-      this.log("irProximity called (no-op in transpile mode)", args, "DEBUG");
-      return 0;
-    }
-
-    irBeaconHeading(args) {
-      this.log(
-        "irBeaconHeading called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return 0;
-    }
-
-    irBeaconDistance(args) {
-      this.log(
-        "irBeaconDistance called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return 0;
-    }
-
-    irRemoteButton(args) {
-      this.log(
-        "irRemoteButton called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
-      return false;
-    }
-
-    buttonPressed(args) {
-      this.log("buttonPressed called (no-op in transpile mode)", args, "DEBUG");
-      return false;
-    }
-
-    waitForButton(args) {
-      this.log("waitForButton called (no-op in transpile mode)", args, "DEBUG");
+      return 0; // Placeholder
     }
 
     screenClear() {
-      this.log("screenClear called (no-op in transpile mode)", null, "DEBUG");
+      // No-op
     }
 
     screenText(args) {
-      this.log("screenText called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     screenTextLarge(args) {
-      this.log(
-        "screenTextLarge called (no-op in transpile mode)",
-        args,
-        "DEBUG",
-      );
+      // No-op
     }
 
     drawPixel(args) {
-      this.log("drawPixel called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     drawLine(args) {
-      this.log("drawLine called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     drawCircle(args) {
-      this.log("drawCircle called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     drawRectangle(args) {
-      this.log("drawRectangle called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     screenUpdate() {
-      this.log("screenUpdate called (no-op in transpile mode)", null, "DEBUG");
+      // No-op
     }
 
     screenInvert() {
-      this.log("screenInvert called (no-op in transpile mode)", null, "DEBUG");
+      // No-op
     }
 
     playTone(args) {
-      this.log("playTone called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     playNote(args) {
-      this.log("playNote called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     beep() {
-      this.log("beep called (no-op in transpile mode)", null, "DEBUG");
+      // No-op
     }
 
     setVolume(args) {
-      this.log("setVolume called (no-op in transpile mode)", args, "DEBUG");
-    }
-
-    getVolume() {
-      this.log("getVolume called (no-op in transpile mode)", null, "DEBUG");
-      return 80;
+      // No-op
     }
 
     stopSound() {
-      this.log("stopSound called (no-op in transpile mode)", null, "DEBUG");
+      // No-op
     }
 
     setLED(args) {
-      this.log("setLED called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     ledAllOff() {
-      this.log("ledAllOff called (no-op in transpile mode)", null, "DEBUG");
-    }
-
-    batteryLevel() {
-      this.log("batteryLevel called (no-op in transpile mode)", null, "DEBUG");
-      return 100;
-    }
-
-    batteryCurrent() {
-      this.log(
-        "batteryCurrent called (no-op in transpile mode)",
-        null,
-        "DEBUG",
-      );
-      return 0;
-    }
-
-    batteryVoltage() {
-      this.log(
-        "batteryVoltage called (no-op in transpile mode)",
-        null,
-        "DEBUG",
-      );
-      return 9.0;
-    }
-
-    freeMemory() {
-      this.log("freeMemory called (no-op in transpile mode)", null, "DEBUG");
-      return 0;
-    }
-
-    resetTimer(args) {
-      this.log("resetTimer called (no-op in transpile mode)", args, "DEBUG");
-    }
-
-    timerValue(args) {
-      this.log("timerValue called (no-op in transpile mode)", args, "DEBUG");
-      return 0;
+      // No-op
     }
 
     waitSeconds(args) {
-      this.log("waitSeconds called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     waitMillis(args) {
-      this.log("waitMillis called (no-op in transpile mode)", args, "DEBUG");
+      // No-op
     }
 
     // ============================================================================
