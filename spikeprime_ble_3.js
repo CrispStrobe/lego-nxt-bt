@@ -2,9 +2,7 @@
   "use strict";
 
   if (!Scratch.extensions.unsandboxed) {
-    throw new Error(
-      "SPIKE Prime Ultimate (BLE) extension must run unsandboxed",
-    );
+    throw new Error("SPIKE Prime (BLE) extension must run unsandboxed");
   }
 
   const ArgumentType = Scratch.ArgumentType;
@@ -48,7 +46,7 @@
   // ============================================================================
   const translations = {
     en: {
-      extensionName: "SPIKE Prime Ultimate (BLE)",
+      extensionName: "SPIKE Prime (BLE)",
 
       // Connection & Modes
       connection: "Connection & Modes",
@@ -142,7 +140,9 @@
       close: "Close",
     },
     de: {
-      extensionName: "SPIKE Prime Ultimate (BLE)",
+      extensionName: "SPIKE Prime (BLE)",
+
+      // Connection & Modes
       connection: "Verbindung & Modi",
       scanAndConnect: "SPIKE Hub scannen und verbinden",
       disconnect: "vom Hub trennen",
@@ -150,22 +150,81 @@
       enableStreamingMode: "Streaming-Modus aktivieren",
       disableStreamingMode: "Streaming-Modus deaktivieren",
       getHubType: "Hub-Typ",
+
+      // Transpilation
       transpilation: "Code-Generierung",
       transpileProject: "Projekt zu SPIKE Python transpilieren",
       showGeneratedCode: "generierten Code anzeigen",
       downloadCode: "als .py Datei herunterladen",
-      uploadAndRun: "Projekt hochladen und ausführen",
-      uploadScript: "Projekt hochladen als [NAME]",
+
+      // Movement
       movement: "Bewegung (Motor-Paare)",
+      setMovementMotors: "setze Bewegungsmotoren [PORT_A] und [PORT_B]",
+      moveForward: "bewege [DIRECTION] für [VALUE] [UNIT]",
+      moveSteering: "bewege mit Lenkung [STEERING] für [VALUE] [UNIT]",
+      steer: "starte Lenkung [STEERING] Geschwindigkeit [SPEED]%",
+      startTank: "starte Kettenantrieb links [LEFT] rechts [RIGHT]",
+      setMovementSpeed: "setze Bewegungsgeschwindigkeit auf [SPEED]%",
+      stopMovement: "stoppe Bewegung",
+
+      // Motors
       motors: "Motoren",
+      motorRunFor: "[PORT] fahre [DIRECTION] für [VALUE] [UNIT]",
+      motorRunToPosition: "[PORT] fahre zu Position [POSITION] Grad",
+      motorStart: "[PORT] starte Motor [DIRECTION]",
+      motorStop: "[PORT] stoppe Motor",
+      motorSetSpeed: "[PORT] setze Geschwindigkeit auf [SPEED]%",
+      getPosition: "[PORT] Position",
+      getSpeed: "[PORT] Geschwindigkeit (Grad/s)",
+      resetMotorPosition: "setze [PORT] Motorposition auf [POSITION] zurück",
+
+      // Display
       display: "5x5 Display",
+      displayText: "schreibe [TEXT]",
+      displayImage: "zeige Bild [IMAGE]",
+      displayPattern: "zeige Muster [PATTERN]",
+      displayClear: "lösche Display",
+      setPixel: "setze Pixel [X] [Y] auf [BRIGHTNESS]%",
+      setCenterButtonColor: "setze Center-Button auf [COLOR]",
+
+      // IMU
       imu: "IMU (Bewegungssensor)",
+      getYaw: "Gierwinkel",
+      getPitch: "Nickwinkel",
+      getRoll: "Rollwinkel",
+      resetYaw: "setze Gierwinkel zurück",
+      presetYaw: "setze Gierwinkel auf [ANGLE] Grad",
+
+      // Sound
       sound: "Sound",
+      playBeep: "Piep [FREQUENCY] Hz für [DURATION] ms",
+      playNote: "spiele Note [NOTE] für [SECS] Sekunden",
+      setVolume: "setze Lautstärke auf [VOLUME]%",
+      stopSound: "stoppe alle Sounds",
+
+      // Sensors
       sensors: "Sensoren",
+      getDistance: "[PORT] Entfernung (mm)",
+      setDistanceLights: "setze [PORT] Entfernungslichter [TL] [TR] [BL] [BR]",
+      getColor: "[PORT] Farbe",
+      getReflection: "[PORT] Reflexion",
+      getForceSensor: "[PORT] Kraft",
+      isForceSensorPressed: "[PORT] Kraftsensor gedrückt?",
+      isColor: "[PORT] sieht [COLOR]?",
+
+      // Status
       status: "Hub-Status",
+      getBatteryLevel: "Batteriestand %",
+
+      // Python
       python: "Python-Ausführung",
+      runPythonCode: "führe Python aus: [CODE]",
+
+      // Menus
       forward: "vorwärts",
       backward: "rückwärts",
+
+      // Messages
       noCodeGenerated: "Noch kein Code generiert!",
       generateFirst: "Generiere zuerst Code!",
       downloaded: "Heruntergeladen",
@@ -1301,6 +1360,7 @@
       } else if (block.opcode === "spikeprime_getRoll") {
         return "(motion_sensor.tilt_angles()[2] / 10)";
       } else if (block.opcode === "spikeprime_getBattery") {
+        this.addImport("import hub");
         return "hub.battery.capacity_left()";
       }
       // Operators
@@ -1814,20 +1874,23 @@
     generateHeader() {
       this.addLine("#!/usr/bin/env python3");
       this.addLine("# Generated from Scratch by SPIKE Prime BLE Extension");
-      this.addLine(`# Language: ${currentLanguage}`);
+      this.addLine(`# Language: ${currentLang}`);
       this.addLine(`# Generated: ${new Date().toISOString()}`);
       this.addLine("");
 
-      // Add all collected imports here in one place
+      // Always add these core imports
       this.addImport("import runloop");
       this.addImport("from hub import port");
 
-      // Add imports that were collected
+      // Output ALL collected imports (sorted)
       const imports = Array.from(this.imports).sort();
       for (const imp of imports) {
         this.addLine(imp);
       }
-      this.addLine("");
+
+      if (imports.length > 0) {
+        this.addLine("");
+      }
     }
 
     generateHeader_with_imports() {
@@ -2022,7 +2085,6 @@
       this.reset();
 
       try {
-        // Get runtime from Scratch.vm - EXACTLY like EV3 extension
         const runtime = Scratch.vm.runtime;
         const targets = runtime.targets;
 
@@ -2061,8 +2123,11 @@
 
         log.transpile("Broadcasts found:", this.broadcasts);
 
-        // Start generating code
-        this.generateHeader();
+        // FIRST PASS: Process all targets to collect imports and generate code body
+        const tempCode = this.code;
+        this.code = []; // Temporarily clear code array
+
+        // Generate globals (without header)
         this.generateGlobals();
         this.generateHelpers();
 
@@ -2076,11 +2141,21 @@
         // Generate main
         this.generateMainExecution();
 
-        const finalCode = this.getCode();
+        // Save the body
+        const bodyCode = this.code.join("\n");
+
+        // SECOND PASS: Now generate header with all collected imports
+        this.code = [];
+        this.generateHeader(); // This will now have all imports
+
+        // Combine header + body
+        const finalCode = this.code.join("\n") + "\n" + bodyCode;
+
         log.transpile("=== Transpilation Complete ===", {
           codeLength: finalCode.length,
           scripts: this.mainScripts.length,
           broadcasts: this.broadcasts.length,
+          imports: this.imports.size,
         });
 
         console.log("=== GENERATED SPIKE PYTHON CODE ===\n" + finalCode);
