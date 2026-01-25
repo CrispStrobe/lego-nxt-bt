@@ -1548,10 +1548,15 @@
         );
 
         let duration =
-          unit === "seconds" ? `${value} * 1000` : `${value} * 1000`;
+          unit === "seconds"
+            ? `${value} * 1000`
+            : unit === "degrees"
+              ? `(${value} / 360) * 1000`
+              : `${value} * 1000`;
         let speed = direction === "forward" ? "500" : "-500";
 
         this.addImport("import motor_pair");
+        this.addImport("from hub import port");
         this.addLine(
           `await motor_pair.move_for_time(motor_pair.PAIR_1, 0, ${duration}, velocity=${speed})`,
         );
@@ -1559,11 +1564,13 @@
         const steering = this.getInputValue(block, "STEERING", blocks);
         const speed = this.getInputValue(block, "SPEED", blocks);
         this.addImport("import motor_pair");
+        this.addImport("from hub import port");
         this.addLine(
           `motor_pair.move(motor_pair.PAIR_1, ${steering}, velocity=${speed * 10})`,
         );
       } else if (opcode === "spikeprime_stopMovement") {
         this.addImport("import motor_pair");
+        this.addImport("from hub import port");
         this.addLine(`motor_pair.stop(motor_pair.PAIR_1)`);
       }
 
@@ -1615,6 +1622,7 @@
       else if (opcode === "motion_movesteps") {
         const steps = this.getInputValue(block, "STEPS", blocks);
         this.addImport("import motor_pair");
+        this.addImport("from hub import port");
         this.addLine(`# Move ${steps} steps`);
         this.addLine(
           `await motor_pair.move_for_degrees(motor_pair.PAIR_1, 0, int(${steps}) * 5)`,
@@ -1622,6 +1630,7 @@
       } else if (opcode === "motion_turnright") {
         const degrees = this.getInputValue(block, "DEGREES", blocks);
         this.addImport("import motor_pair");
+        this.addImport("from hub import port");
         this.addLine(`# Turn right ${degrees} degrees`);
         this.addLine(
           `await motor_pair.move_for_degrees(motor_pair.PAIR_1, 100, int(${degrees}) * 2)`,
@@ -1629,6 +1638,7 @@
       } else if (opcode === "motion_turnleft") {
         const degrees = this.getInputValue(block, "DEGREES", blocks);
         this.addImport("import motor_pair");
+        this.addImport("from hub import port");
         this.addLine(`# Turn left ${degrees} degrees`);
         this.addLine(
           `await motor_pair.move_for_degrees(motor_pair.PAIR_1, -100, int(${degrees}) * 2)`,
