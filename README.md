@@ -30,7 +30,7 @@ Try **legoboost_scratchlink.js** (with ScratchLink installed).
 
 ### Original Firmware 
 
-**ev3_lms_transpile.js** allows streaming mode (direct command execution) and transpiling to lsmasm, which can the be compiled to bytecode that should run on the EV3 Brick. Compilation needs internet connectivity as it uses a REST API which wraps NBC (https://bricxcc.sourceforge.net/nbc/) and lsmasm (https://github.com/ev3dev/lmsasm) at https://lego-compiler.vercel.app/ (source: https://github.com/CrispStrobe/legacy-lego-compiler). You might want to try this with caution!
+**ev3_lms_transpile.js** allows streaming mode (direct command execution) and transpiling to lmsasm, which can the be compiled to bytecode that should run on the EV3 Brick. Compilation needs internet connectivity as it uses a REST API which wraps NBC (https://bricxcc.sourceforge.net/nbc/) and lmsasm (https://github.com/ev3dev/lmsasm) at https://lego-compiler.vercel.app/ (source: https://github.com/CrispStrobe/legacy-lego-compiler). You might want to try this with caution!
 
 **ev3_btc.js** should connect to the original Firmware with only streaming mode
 
@@ -48,7 +48,7 @@ This is all work in progress.
 
 **legonxt_transpile_scratchlink.js** works with ScratchLink and gives you the option to transpile the Codeblocks to NXC and then compile them to RXE files which the NXT Brick can run directly. 
 
-The compilation needs internet connectivity, because it uses a REST API which wraps NBC (https://bricxcc.sourceforge.net/nbc/) and lsmasm (https://github.com/ev3dev/lmsasm) at https://lego-compiler.vercel.app/ (source: https://github.com/CrispStrobe/legacy-lego-compiler).
+The compilation needs internet connectivity, because it uses a REST API which wraps NBC (https://bricxcc.sourceforge.net/nbc/) and lmsasm (https://github.com/ev3dev/lmsasm) at https://lego-compiler.vercel.app/ (source: https://github.com/CrispStrobe/legacy-lego-compiler).
 
 (There are other, yet incomplete legonxt_transpile_direct and legonxt_transpile_bridge scripts. I might bring those up to feature parity sometime, but they were mostly for testing only.)
 
