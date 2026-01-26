@@ -30,13 +30,15 @@ Try **legoboost_scratchlink.js** (with ScratchLink installed).
 
 ### Original Firmware 
 
-Connecting to the original Firmware would also be possible but only in direct streaming mode (controlling PC/Tablet must be active) (upload would require more efforts than i can invest atm at least).
+**ev3_lms_transpile.js** allows streaming mode (direct command execution) and transpiling to lsmasm, which can the be compiled to bytecode that should run on the EV3 Brick. Compilation needs internet connectivity as it uses a REST API which wraps NBC (https://bricxcc.sourceforge.net/nbc/) and lsmasm (https://github.com/ev3dev/lmsasm) at https://lego-compiler.vercel.app/ (source: https://github.com/CrispStrobe/legacy-lego-compiler). You might want to try this with caution!
+
+**ev3_btc.js** should connect to the original Firmware with only streaming mode
 
 ### EV3DEV Firmware
 
 With ev3dev, you have Linux on the device and can do lots of cool things.
 
-For instance, you can run a simple python bridge: **ev3_ondevice_bridge.py** which will support both streaming mode as well as uploading scripts directly from TurboWarp, from which we simply transpile them to python scripts and upload them.
+For instance, you can run a simple python bridge: **ev3_ondevice_bridge.py** which will support both streaming mode (direct commands execution) as well as transpiling the Codeblocks to python scripts and upload them to the ev3dev brick for on-device-execution (without needing a computer connect to control the brick).
 
 For this, you need **ev3_transpile.js** extension in TurboWarp.
 
