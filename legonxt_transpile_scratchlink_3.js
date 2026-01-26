@@ -2075,23 +2075,114 @@
       }
     }
 
+    autoDetectSensors() {
+        this.logger.log("\n" + "=".repeat(70));
+        this.logger.log("AUTO-DETECTING SENSORS FROM USAGE");
+        this.logger.log("=".repeat(70));
+        
+        // Join all generated code to search
+        const codeStr = this.code.join('\n');
+        
+        this.logger.log(`Scanning ${codeStr.length} characters of generated code...`);
+        this.logger.debug(`Code preview:\n${codeStr.substring(0, 500)}...`);
+        
+        let detectedCount = 0;
+        
+        // ===== ULTRASONIC SENSORS =====
+        const ultrasonicChecks = [
+            { pattern: 'SensorUS(IN_1)', sensor: 'ultrasonic_S1', port: 1 },
+            { pattern: 'SensorUS(IN_2)', sensor: 'ultrasonic_S2', port: 2 },
+            { pattern: 'SensorUS(IN_3)', sensor: 'ultrasonic_S3', port: 3 },
+            { pattern: 'SensorUS(IN_4)', sensor: 'ultrasonic_S4', port: 4 },
+        ];
+        
+        for (const check of ultrasonicChecks) {
+            if (codeStr.includes(check.pattern)) {
+                this.sensorSetup.add(check.sensor);
+                detectedCount++;
+                this.logger.success(`  ✓ Found ${check.pattern} → ${check.sensor}`);
+            }
+        }
+        
+        // ===== LIGHT/GENERIC SENSORS =====
+        // Sensor(IN_N) without SensorUS(IN_N) = light sensor
+        const sensorChecks = [
+            { pattern: 'Sensor(IN_1)', ultrasonic: 'SensorUS(IN_1)', sensor: 'light_S1_on', port: 1 },
+            { pattern: 'Sensor(IN_2)', ultrasonic: 'SensorUS(IN_2)', sensor: 'light_S2_on', port: 2 },
+            { pattern: 'Sensor(IN_3)', ultrasonic: 'SensorUS(IN_3)', sensor: 'light_S3_on', port: 3 },
+            { pattern: 'Sensor(IN_4)', ultrasonic: 'SensorUS(IN_4)', sensor: 'light_S4_on', port: 4 },
+        ];
+        
+        for (const check of sensorChecks) {
+            if (codeStr.includes(check.pattern) && !codeStr.includes(check.ultrasonic)) {
+                this.sensorSetup.add(check.sensor);
+                detectedCount++;
+                this.logger.success(`  ✓ Found ${check.pattern} → ${check.sensor}`);
+            }
+        }
+        
+        // ===== TOUCH SENSORS =====
+        const touchChecks = [
+            { pattern: 'SENSOR_1', sensor: 'touch_S1', port: 1 },
+            { pattern: 'SENSOR_2', sensor: 'touch_S2', port: 2 },
+            { pattern: 'SENSOR_3', sensor: 'touch_S3', port: 3 },
+            { pattern: 'SENSOR_4', sensor: 'touch_S4', port: 4 },
+        ];
+        
+        for (const check of touchChecks) {
+            if (codeStr.includes(check.pattern)) {
+                this.sensorSetup.add(check.sensor);
+                detectedCount++;
+                this.logger.success(`  ✓ Found ${check.pattern} → ${check.sensor}`);
+            }
+        }
+        
+        if (detectedCount === 0) {
+            this.logger.warn("  ⚠️ No sensors detected in generated code");
+        } else {
+            this.logger.success(`\n  ✅ Auto-detected ${detectedCount} sensor(s)`);
+        }
+        
+        this.logger.log("=".repeat(70) + "\n");
+    }
+
     processBlockChain(blockId, blocks) {
-      let currentId = blockId;
-      let chainLength = 0;
+        let currentId = blockId;
+        let chainLength = 0;
 
-      while (currentId) {
-        const block = blocks._blocks[currentId];
-        if (!block) break;
+        this.logger.debug(`\n=== STARTING BLOCK CHAIN ===`);
+        this.logger.debug(`Starting block ID: ${blockId}`);
 
-        chainLength++;
-        if (chainLength > 1000) {
-          this.logger.warn("Chain length exceeded 1000 blocks, stopping");
-          break;
+        while (currentId) {
+            const block = blocks._blocks[currentId];
+            
+            if (!block) {
+                this.logger.error(`❌ Block ${currentId} not found in blocks._blocks`);
+                break;
+            }
+
+            chainLength++;
+            if (chainLength > 1000) {
+                this.logger.warn("Chain length exceeded 1000 blocks, stopping");
+                break;
+            }
+
+            // LOG EVERY BLOCK
+            this.logger.debug(`\n[Chain ${chainLength}] Block: ${block.opcode} (ID: ${currentId})`);
+            this.logger.debug(`  Next: ${block.next || 'null'}`);
+
+            // Process the block
+            try {
+                this.processBlock(block, blocks);
+            } catch (error) {
+                this.logger.error(`❌ Error processing block ${block.opcode}:`, error);
+            }
+
+            // Move to next block
+            currentId = block.next;
         }
 
-        this.processBlock(block, blocks);
-        currentId = block.next;
-      }
+        this.logger.debug(`\n=== BLOCK CHAIN COMPLETE (${chainLength} blocks) ===\n`);
     }
 
     processHatBlock(hatBlock, blocks) {
@@ -2201,87 +2292,101 @@
     }
 
     generateSensorSetup() {
-      this.logger.log("\n=== GENERATING SENSOR SETUP ===");
-      this.logger.log(`Sensor setup size: ${this.sensorSetup.size}`);
-      this.logger.log(`Sensor setup contents:`, Array.from(this.sensorSetup));
+        this.logger.log("\n" + "=".repeat(70));
+        this.logger.log("GENERATING SENSOR SETUP");
+        this.logger.log("=".repeat(70));
+        
+        this.logger.log(`Sensor setup size: ${this.sensorSetup.size}`);
+        this.logger.log(`Sensor setup contents:`, Array.from(this.sensorSetup));
+        
+        // ALWAYS generate the function
+        this.addLine("// Initialize sensors");
+        this.addLine("sub InitSensors() {");
+        this.increaseIndent();
 
-      // ALWAYS generate the function
-      this.addLine("// Initialize sensors");
-      this.addLine("sub InitSensors() {");
-      this.increaseIndent();
-
-      if (this.sensorSetup.size === 0) {
-        this.addLine("// No sensors to initialize");
-        this.logger.warn("  ⚠️ No sensors tracked");
-      } else {
-        // Parse sensor setup strings
-        const sensors = [];
-
-        for (const sensor of this.sensorSetup) {
-          this.logger.debug(`  Parsing sensor: "${sensor}"`);
-
-          // Format: "type_Sn_extra" or "type_Sn"
-          // Examples: "light_S1_on", "ultrasonic_S2", "touch_S1"
-          const match = sensor.match(/^(\w+)_S(\d)(?:_(\w+))?$/);
-
-          if (match) {
-            const type = match[1]; // "light", "ultrasonic", "touch", etc.
-            const portNum = match[2]; // "1", "2", "3", "4"
-            const extra = match[3] || ""; // "on", "off", or empty
-
-            sensors.push({ type, portNum, extra, original: sensor });
-            this.logger.debug(
-              `    ✓ Parsed: type=${type}, port=${portNum}, extra=${extra}`,
-            );
-          } else {
-            this.logger.error(`    ❌ Failed to parse: "${sensor}"`);
-          }
-        }
-
-        // Sort by port number
-        sensors.sort((a, b) => parseInt(a.portNum) - parseInt(b.portNum));
-
-        this.logger.log(
-          `  Generating setup code for ${sensors.length} sensor(s):`,
-        );
-
-        // Generate setup code
-        for (const sensor of sensors) {
-          const { type, portNum, extra } = sensor;
-
-          if (type === "touch") {
-            this.addLine(`SetSensorTouch(IN_${portNum});`);
-            this.logger.log(`    ✓ SetSensorTouch(IN_${portNum})`);
-          } else if (type === "light") {
-            if (extra === "on") {
-              this.addLine(`SetSensorLight(IN_${portNum});`);
-              this.logger.log(`    ✓ SetSensorLight(IN_${portNum}) [LED on]`);
-            } else {
-              this.addLine(`SetSensorLowspeed(IN_${portNum});`);
-              this.logger.log(
-                `    ✓ SetSensorLowspeed(IN_${portNum}) [LED off]`,
-              );
+        if (this.sensorSetup.size === 0) {
+            this.addLine("// No sensors to initialize");
+            this.logger.warn("  ⚠️ No sensors tracked");
+        } else {
+            // Parse sensor setup strings
+            const sensorsMap = new Map(); // Port → Sensor config (deduplicate by port)
+            
+            for (const sensor of this.sensorSetup) {
+                this.logger.debug(`  Parsing sensor: "${sensor}"`);
+                
+                // Format: "type_Sn_extra" or "type_Sn"
+                const match = sensor.match(/^(\w+)_S(\d)(?:_(\w+))?$/);
+                
+                if (match) {
+                    const type = match[1];
+                    const portNum = match[2];
+                    const extra = match[3] || "";
+                    
+                    // CRITICAL: Deduplicate by port
+                    // Priority: specific types (touch, light, ultrasonic) > generic
+                    const key = `IN_${portNum}`;
+                    
+                    if (!sensorsMap.has(key)) {
+                        sensorsMap.set(key, { type, portNum, extra, original: sensor });
+                        this.logger.debug(`    ✓ Added: port=${portNum}, type=${type}, extra=${extra}`);
+                    } else {
+                        const existing = sensorsMap.get(key);
+                        this.logger.warn(`    ⚠️ Port ${portNum} already assigned to ${existing.type}, skipping ${type}`);
+                        
+                        // If existing is generic and new is specific, replace
+                        const specificTypes = ['light', 'ultrasonic', 'touch', 'color', 'sound'];
+                        if (!specificTypes.includes(existing.type) && specificTypes.includes(type)) {
+                            sensorsMap.set(key, { type, portNum, extra, original: sensor });
+                            this.logger.debug(`    ✓ Replaced with more specific type: ${type}`);
+                        }
+                    }
+                } else {
+                    this.logger.error(`    ❌ Failed to parse: "${sensor}"`);
+                }
             }
-          } else if (type === "sound") {
-            this.addLine(`SetSensorSound(IN_${portNum});`);
-            this.logger.log(`    ✓ SetSensorSound(IN_${portNum})`);
-          } else if (type === "ultrasonic") {
-            this.addLine(`SetSensorLowspeed(IN_${portNum});`);
-            this.logger.log(`    ✓ SetSensorLowspeed(IN_${portNum})`);
-          } else if (type === "color") {
-            this.addLine(`SetSensorColorFull(IN_${portNum});`);
-            this.logger.log(`    ✓ SetSensorColorFull(IN_${portNum})`);
-          } else {
-            this.logger.error(`    ❌ Unknown sensor type: "${type}"`);
-          }
+            
+            // Sort by port number
+            const sensors = Array.from(sensorsMap.values()).sort((a, b) => 
+                parseInt(a.portNum) - parseInt(b.portNum)
+            );
+            
+            this.logger.log(`  Generating setup code for ${sensors.length} unique sensor(s):`);
+            
+            // Generate setup code
+            for (const sensor of sensors) {
+                const { type, portNum, extra } = sensor;
+                
+                if (type === "touch") {
+                    this.addLine(`SetSensorTouch(IN_${portNum});`);
+                    this.logger.log(`    ✓ SetSensorTouch(IN_${portNum})`);
+                } else if (type === "light") {
+                    if (extra === "on") {
+                        this.addLine(`SetSensorLight(IN_${portNum});`);
+                        this.logger.log(`    ✓ SetSensorLight(IN_${portNum}) [LED on]`);
+                    } else {
+                        this.addLine(`SetSensorLowspeed(IN_${portNum});`);
+                        this.logger.log(`    ✓ SetSensorLowspeed(IN_${portNum}) [LED off]`);
+                    }
+                } else if (type === "sound") {
+                    this.addLine(`SetSensorSound(IN_${portNum});`);
+                    this.logger.log(`    ✓ SetSensorSound(IN_${portNum})`);
+                } else if (type === "ultrasonic") {
+                    this.addLine(`SetSensorLowspeed(IN_${portNum});`);
+                    this.logger.log(`    ✓ SetSensorLowspeed(IN_${portNum}) [ultrasonic]`);
+                } else if (type === "color") {
+                    this.addLine(`SetSensorColorFull(IN_${portNum});`);
+                    this.logger.log(`    ✓ SetSensorColorFull(IN_${portNum})`);
+                } else {
+                    this.logger.error(`    ❌ Unknown sensor type: "${type}"`);
+                }
+            }
         }
-      }
 
-      this.decreaseIndent();
-      this.addLine("}");
-      this.addLine("");
-
-      this.logger.log("=== SENSOR SETUP COMPLETE ===\n");
+        this.decreaseIndent();
+        this.addLine("}");
+        this.addLine("");
+        
+        this.logger.log("=".repeat(70) + "\n");
     }
 
     generateSpriteStateManager() {
@@ -2497,186 +2602,208 @@
         }
 
         // ==================== STEP 3: COLLECT VARIABLES ====================
-        this.logger.log("\n" + "=".repeat(70));
-        this.logger.log("STEP 3: COLLECTING VARIABLES");
-        this.logger.log("=".repeat(70));
+this.logger.log("\n" + "=".repeat(70));
+this.logger.log("STEP 3: COLLECTING VARIABLES");
+this.logger.log("=".repeat(70));
 
-        let varCount = 0;
-        for (const target of targets) {
-          if (target.variables) {
-            const targetName = target.isStage ? "Stage" : target.sprite.name;
-            this.logger.log(`\n  Checking "${targetName}" variables...`);
+let varCount = 0;
+for (const target of targets) {
+  if (target.variables) {
+    const targetName = target.isStage ? "Stage" : target.sprite.name;
+    this.logger.log(`\n  Checking "${targetName}" variables...`);
 
-            for (const varId in target.variables) {
-              const variable = target.variables[varId];
+    for (const varId in target.variables) {
+      const variable = target.variables[varId];
 
-              // Only collect regular variables, not broadcasts or lists
-              if (
-                !variable.type ||
-                variable.type === "" ||
-                variable.type === "scalar"
-              ) {
-                const varName = variable.name;
-                const sanitized = this.sanitizeName(varName);
+      // Only collect regular variables, not broadcasts or lists
+      if (
+        !variable.type ||
+        variable.type === "" ||
+        variable.type === "scalar"
+      ) {
+        const varName = variable.name;
+        const sanitized = this.sanitizeName(varName);
 
-                // Don't overwrite if already defined
-                if (!this.variables.has(varName)) {
-                  this.variables.set(varName, sanitized);
-                  varCount++;
-                  this.logger.log(
-                    `    ✓ Variable: "${varName}" → ${sanitized}`,
-                  );
-                }
-              }
-            }
-          }
-        }
-
-        this.logger.success(`\n✓ Collected ${varCount} variable(s)`);
-
-        // ==================== STEP 4: GENERATE BOILERPLATE ====================
-        this.logger.log("\n" + "=".repeat(70));
-        this.logger.log("STEP 4: GENERATING BOILERPLATE CODE");
-        this.logger.log("=".repeat(70));
-
-        this.generateHeader();
-        this.logger.log("  ✓ Generated header");
-
-        this.generateVariables();
-        this.logger.log(
-          `  ✓ Generated ${this.variables.size} variable declaration(s)`,
-        );
-
-        this.generateSensorSetup();
-        this.logger.log(
-          `  ✓ Generated sensor setup (${this.sensorSetup.size} sensor(s))`,
-        );
-
-        this.generateSpriteStateManager();
-        this.logger.log(
-          `  ✓ Generated sprite state manager (${Object.keys(this.spriteStates).length} sprite(s))`,
-        );
-
-        // ==================== STEP 5: PROCESS TARGETS ====================
-        this.logger.log("\n" + "=".repeat(70));
-        this.logger.log("STEP 5: PROCESSING TARGETS (TRANSPILING BLOCKS)");
-        this.logger.log("=".repeat(70));
-
-        const allFunctions = [];
-        const mainScripts = [];
-        let totalHatBlocks = 0;
-
-        for (const target of targets) {
-          const targetName = target.isStage ? "Stage" : target.sprite.name;
-          this.activeSpriteName = this.sanitizeName(targetName);
-
-          this.logger.log(`\n  Processing: "${targetName}"`);
-          this.logger.log(`    Active sprite name: ${this.activeSpriteName}`);
-
-          const blocks = target.blocks;
-          if (!blocks || !blocks._blocks) {
-            this.logger.warn(`    ⚠️ No blocks found`);
-            continue;
-          }
-
-          const blockCount = Object.keys(blocks._blocks).length;
-          this.logger.log(`    Block count: ${blockCount}`);
-
-          // Find hat blocks
-          const hatBlocks = [];
-          for (const blockId in blocks._blocks) {
-            const block = blocks._blocks[blockId];
-            if (
-              block.opcode === "event_whenflagclicked" ||
-              block.opcode === "event_whenbroadcastreceived"
-            ) {
-              hatBlocks.push(block);
-            }
-          }
-
-          this.logger.log(`    Hat blocks found: ${hatBlocks.length}`);
-          totalHatBlocks += hatBlocks.length;
-
-          // Process each hat block
-          for (let i = 0; i < hatBlocks.length; i++) {
-            const hatBlock = hatBlocks[i];
-            this.logger.log(
-              `\n    Processing hat block ${i + 1}/${hatBlocks.length}: ${hatBlock.opcode}`,
-            );
-
-            const funcCode = [];
-            const savePreviousCode = this.code;
-            this.code = funcCode;
-
-            try {
-              const funcName = this.processHatBlock(hatBlock, blocks);
-
-              if (funcName) {
-                allFunctions.push(funcCode);
-
-                if (hatBlock.opcode === "event_whenflagclicked") {
-                  mainScripts.push(funcName);
-                  this.logger.success(
-                    `      ✓ Created main script: ${funcName}`,
-                  );
-                } else {
-                  this.logger.success(`      ✓ Created function: ${funcName}`);
-                }
-              }
-            } catch (error) {
-              this.logger.error(`      ❌ Failed to process hat block:`, error);
-            } finally {
-              this.code = savePreviousCode;
-            }
-          }
-        }
-
-        this.logger.success(
-          `\n✓ Processed ${totalHatBlocks} hat block(s) total`,
-        );
-        this.logger.log(`  Generated ${allFunctions.length} function(s)`);
-        this.logger.log(`  Main scripts (green flag): ${mainScripts.length}`);
-
-        // ==================== STEP 6: ASSEMBLE FINAL CODE ====================
-        this.logger.log("\n" + "=".repeat(70));
-        this.logger.log("STEP 6: ASSEMBLING FINAL CODE");
-        this.logger.log("=".repeat(70));
-
-        // Add all functions
-        for (let i = 0; i < allFunctions.length; i++) {
+        // Don't overwrite if already defined
+        if (!this.variables.has(varName)) {
+          this.variables.set(varName, sanitized);
+          varCount++;
           this.logger.log(
-            `  Adding function ${i + 1}/${allFunctions.length}...`,
+            `    ✓ Variable: "${varName}" → ${sanitized}`,
           );
-          this.code.push(...allFunctions[i]);
         }
+      }
+    }
+  }
+}
 
-        // Generate main() function
-        this.logger.log("\n  Generating main() function...");
-        this.addLine("\ntask main() {");
-        this.increaseIndent();
+this.logger.success(`\n✓ Collected ${varCount} variable(s)`);
 
-        if (this.sensorSetup.size > 0) {
-          this.addLine("InitSensors();");
-          this.logger.log("    ✓ Added InitSensors() call");
-        }
+// ==================== STEP 4: GENERATE HEADER & VARIABLES ====================
+this.logger.log("\n" + "=".repeat(70));
+this.logger.log("STEP 4: GENERATING HEADER & VARIABLES");
+this.logger.log("=".repeat(70));
 
-        if (Object.keys(this.spriteStates).length > 0) {
-          this.addLine("InitSprites();");
-          this.logger.log("    ✓ Added InitSprites() call");
-        }
+this.generateHeader();
+this.logger.log("  ✓ Generated header");
 
-        if (mainScripts.length > 0) {
-          for (const scriptName of mainScripts) {
-            this.addLine(`StartTask(${scriptName});`);
-            this.logger.log(`    ✓ Added StartTask(${scriptName})`);
-          }
+this.generateVariables();
+this.logger.log(
+  `  ✓ Generated ${this.variables.size} variable declaration(s)`,
+);
+
+// ==================== STEP 5: PROCESS TARGETS ====================
+this.logger.log("\n" + "=".repeat(70));
+this.logger.log("STEP 5: PROCESSING TARGETS (TRANSPILING BLOCKS)");
+this.logger.log("=".repeat(70));
+
+const allFunctions = [];  // ← DECLARE HERE!
+const mainScripts = [];
+let totalHatBlocks = 0;
+
+for (const target of targets) {
+  const targetName = target.isStage ? "Stage" : target.sprite.name;
+  this.activeSpriteName = this.sanitizeName(targetName);
+
+  this.logger.log(`\n  Processing: "${targetName}"`);
+  this.logger.log(`    Active sprite name: ${this.activeSpriteName}`);
+
+  const blocks = target.blocks;
+  if (!blocks || !blocks._blocks) {
+    this.logger.warn(`    ⚠️ No blocks found`);
+    continue;
+  }
+
+  const blockCount = Object.keys(blocks._blocks).length;
+  this.logger.log(`    Block count: ${blockCount}`);
+
+  // Find hat blocks
+  const hatBlocks = [];
+  for (const blockId in blocks._blocks) {
+    const block = blocks._blocks[blockId];
+    if (
+      block.opcode === "event_whenflagclicked" ||
+      block.opcode === "event_whenbroadcastreceived"
+    ) {
+      hatBlocks.push(block);
+    }
+  }
+
+  this.logger.log(`    Hat blocks found: ${hatBlocks.length}`);
+  totalHatBlocks += hatBlocks.length;
+
+  // Process each hat block
+  for (let i = 0; i < hatBlocks.length; i++) {
+    const hatBlock = hatBlocks[i];
+    this.logger.log(
+      `\n    Processing hat block ${i + 1}/${hatBlocks.length}: ${hatBlock.opcode}`,
+    );
+
+    const funcCode = [];
+    const savePreviousCode = this.code;
+    this.code = funcCode;
+
+    try {
+      const funcName = this.processHatBlock(hatBlock, blocks);
+
+      if (funcName) {
+        allFunctions.push(funcCode);
+
+        if (hatBlock.opcode === "event_whenflagclicked") {
+          mainScripts.push(funcName);
+          this.logger.success(
+            `      ✓ Created main script: ${funcName}`,
+          );
         } else {
-          this.addLine("// No green flag scripts found");
-          this.logger.warn("    ⚠️ No green flag scripts found");
+          this.logger.success(`      ✓ Created function: ${funcName}`);
         }
+      }
+    } catch (error) {
+      this.logger.error(`      ❌ Failed to process hat block:`, error);
+    } finally {
+      this.code = savePreviousCode;
+    }
+  }
+}
 
-        this.decreaseIndent();
-        this.addLine("}");
+this.logger.success(
+  `\n✓ Processed ${totalHatBlocks} hat block(s) total`,
+);
+this.logger.log(`  Generated ${allFunctions.length} function(s)`);
+this.logger.log(`  Main scripts (green flag): ${mainScripts.length}`);
+
+// ==================== STEP 6: AUTO-DETECT SENSORS ====================
+this.logger.log("\n" + "=".repeat(70));
+this.logger.log("STEP 6: AUTO-DETECTING SENSORS");
+this.logger.log("=".repeat(70));
+
+// First, add all function code to this.code so autoDetectSensors can scan it
+const tempCode = [];
+for (const funcCode of allFunctions) {
+  tempCode.push(...funcCode);
+}
+
+// Temporarily add to this.code for scanning
+const savedCode = this.code;
+this.code = [...this.code, ...tempCode];
+
+// Now auto-detect
+this.autoDetectSensors();
+
+// Restore
+this.code = savedCode;
+
+// Generate sensor setup
+this.generateSensorSetup();
+this.logger.log(
+  `  ✓ Generated sensor setup (${this.sensorSetup.size} sensor(s))`,
+);
+
+this.generateSpriteStateManager();
+this.logger.log(
+  `  ✓ Generated sprite state manager (${Object.keys(this.spriteStates).length} sprite(s))`,
+);
+
+// ==================== STEP 7: ASSEMBLE FINAL CODE ====================
+this.logger.log("\n" + "=".repeat(70));
+this.logger.log("STEP 7: ASSEMBLING FINAL CODE");
+this.logger.log("=".repeat(70));
+
+// Add all functions
+for (let i = 0; i < allFunctions.length; i++) {
+  this.logger.log(
+    `  Adding function ${i + 1}/${allFunctions.length}...`,
+  );
+  this.code.push(...allFunctions[i]);
+}
+
+// Generate main() function
+this.logger.log("\n  Generating main() function...");
+this.addLine("\ntask main() {");
+this.increaseIndent();
+
+if (this.sensorSetup.size > 0) {
+  this.addLine("InitSensors();");
+  this.logger.log("    ✓ Added InitSensors() call");
+}
+
+if (Object.keys(this.spriteStates).length > 0) {
+  this.addLine("InitSprites();");
+  this.logger.log("    ✓ Added InitSprites() call");
+}
+
+if (mainScripts.length > 0) {
+  for (const scriptName of mainScripts) {
+    this.addLine(`StartTask(${scriptName});`);
+    this.logger.log(`    ✓ Added StartTask(${scriptName})`);
+  }
+} else {
+  this.addLine("// No green flag scripts found");
+  this.logger.warn("    ⚠️ No green flag scripts found");
+}
+
+this.decreaseIndent();
+this.addLine("}");
 
         // ==================== FINAL STATISTICS ====================
         const finalCode = this.getCode();
