@@ -1505,16 +1505,16 @@
       });
 
       if (requireReply) {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
           const id = this.requestId++;
           this.pendingRequests.set(id, resolve);
           setTimeout(() => {
             if (this.pendingRequests.has(id)) {
               this.pendingRequests.delete(id);
               logger.warn(`Request ${id} timed out`);
-              reject(new Error("Request timed out - no response from NXT"));
+              resolve(null);
             }
-          }, 5000); // Increased timeout to 5 seconds for file operations
+          }, 2000);
         });
       }
 
@@ -3699,17 +3699,17 @@
       logger.log("=".repeat(60));
 
       if (!this.rxeBase64) {
-        alert("⚠️ Compile to .rxe first using 'compile NXC to .rxe' block!");
+        alert("⚠️ Compile to .rxe first!");
         return;
       }
 
-      if (!this.peripheral.isConnected()) {
-        alert("⚠️ Connect to NXT first using 'connect to NXT' block!");
+      if (!this.isConnected()) {
+        alert("⚠️ Connect to NXT first!");
         return;
       }
 
       try {
-        logger.log("Decoding base64 RXE data...");
+        logger.log("Decoding RXE data...");
         const binaryString = atob(this.rxeBase64);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -3718,21 +3718,38 @@
 
         logger.log(`File size: ${bytes.length} bytes`);
 
-        // Use shorter filename without extension first (NXT might not like .rxe)
         const filename = "program.rxe";
 
-        // Create filename bytes - ensure null termination
-        const filenameBytes = [];
-        for (let i = 0; i < filename.length && i < 19; i++) {
-          filenameBytes.push(filename.charCodeAt(i));
-        }
-        // Pad with zeros to make exactly 20 bytes
-        while (filenameBytes.length < 20) {
-          filenameBytes.push(0);
+        // 🔥 STEP 1: Try to delete existing file (optional but recommended)
+        try {
+          logger.log("Attempting to delete existing file...");
+          const filenameBytes = new Array(20).fill(0);
+          for (let i = 0; i < Math.min(filename.length, 19); i++) {
+            filenameBytes[i] = filename.charCodeAt(i);
+          }
+
+          const deleteReply = await this.sendTelegram(
+            NXT_OPCODE.DELETE,
+            filenameBytes,
+            true,
+            true,
+          );
+
+          if (deleteReply && deleteReply[2] === 0x00) {
+            logger.log("✓ Existing file deleted");
+          } else {
+            logger.log("No existing file to delete");
+          }
+        } catch (e) {
+          logger.log("No existing file or delete failed (continuing anyway)");
         }
 
-        logger.log(`Opening file "${filename}" for writing...`);
-        logger.log(`Filename bytes: [${filenameBytes.join(", ")}]`);
+        // 🔥 STEP 2: Open file for writing
+        logger.log(`Opening "${filename}" for writing...`);
+        const filenameBytes = new Array(20).fill(0);
+        for (let i = 0; i < Math.min(filename.length, 19); i++) {
+          filenameBytes[i] = filename.charCodeAt(i);
+        }
 
         const openCmd = [
           ...filenameBytes,
@@ -3742,89 +3759,108 @@
           (bytes.length >> 24) & 0xff,
         ];
 
-        logger.log(`Open command length: ${openCmd.length} bytes`);
-
-        let openReply;
-        try {
-          openReply = await this.peripheral.sendTelegram(
-            NXT_OPCODE.OPEN_WRITE,
-            openCmd,
-            true,
-            true,
-          );
-        } catch (error) {
-          throw new Error(`Communication error: ${error.message}`);
-        }
-
-        if (!openReply) {
-          throw new Error("No response from NXT - check Bluetooth connection");
-        }
-
-        logger.log(
-          `Open reply: [${Array.from(openReply)
-            .map((b) => "0x" + b.toString(16))
-            .join(", ")}]`,
+        const openReply = await this.sendTelegram(
+          NXT_OPCODE.OPEN_WRITE,
+          openCmd,
+          true,
+          true,
         );
 
-        if (openReply[2] !== 0x00) {
-          const errorCode = openReply[2];
+        // 🔥 Check status
+        if (!openReply || openReply.length < 4) {
+          throw new Error("Invalid OPEN_WRITE response");
+        }
+
+        const openStatus = openReply[2];
+        if (openStatus !== 0x00) {
           const errorMsg =
-            NXT_ERROR[errorCode] ||
-            `Unknown error (0x${errorCode.toString(16)})`;
+            NXT_ERROR[openStatus] ||
+            `Unknown error (0x${openStatus.toString(16)})`;
           throw new Error(`Failed to open file: ${errorMsg}`);
         }
 
         const handle = openReply[3];
-        logger.log(`File opened with handle: ${handle}`);
+        logger.log(`✓ File opened with handle: ${handle}`);
 
-        const chunkSize = 32;
-        const totalChunks = Math.ceil(bytes.length / chunkSize);
-        logger.log(
-          `Uploading in ${totalChunks} chunks of ${chunkSize} bytes...`,
-        );
+        // 🔥 STEP 3: Write data in 32-byte chunks (NXT protocol limit)
+        const CHUNK_SIZE = 32; // ← Fixed size!
+        const totalChunks = Math.ceil(bytes.length / CHUNK_SIZE);
+        logger.log(`Writing ${totalChunks} chunks of ${CHUNK_SIZE} bytes...`);
 
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.slice(i, Math.min(i + chunkSize, bytes.length));
+        for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+          const chunk = bytes.slice(i, Math.min(i + CHUNK_SIZE, bytes.length));
           const writeCmd = [handle, ...Array.from(chunk)];
 
-          let writeReply;
-          try {
-            writeReply = await this.peripheral.sendTelegram(
-              NXT_OPCODE.WRITE,
-              writeCmd,
-              true,
-              true,
-            );
-          } catch (error) {
-            throw new Error(`Write failed at byte ${i}: ${error.message}`);
+          const writeReply = await this.sendTelegram(
+            NXT_OPCODE.WRITE,
+            writeCmd,
+            true,
+            true,
+          );
+
+          if (!writeReply || writeReply.length < 5) {
+            throw new Error(`Write failed at byte ${i}: invalid response`);
           }
 
-          if (!writeReply || writeReply[2] !== 0x00) {
-            const errorCode = writeReply ? writeReply[2] : 0xff;
+          const writeStatus = writeReply[2];
+          if (writeStatus !== 0x00) {
+            const errorMsg =
+              NXT_ERROR[writeStatus] ||
+              `Unknown error (0x${writeStatus.toString(16)})`;
+            throw new Error(`Write failed at byte ${i}: ${errorMsg}`);
+          }
+
+          // Check bytes written
+          const handle_ret = writeReply[3];
+          const bytes_written = writeReply[4] | (writeReply[5] << 8);
+
+          if (bytes_written !== chunk.length) {
             throw new Error(
-              `Write failed at byte ${i}: ${NXT_ERROR[errorCode] || "Unknown error"}`,
+              `Write incomplete at byte ${i}: wrote ${bytes_written}/${chunk.length} bytes`,
             );
           }
 
-          await this.peripheral.sleep(30); // Slightly longer delay between writes
+          await this.sleep(20);
 
-          if (i % 320 === 0) {
+          if (i % (CHUNK_SIZE * 10) === 0) {
             const progress = Math.round((i / bytes.length) * 100);
             logger.log(`Upload progress: ${progress}%`);
           }
         }
 
+        logger.log("✓ All chunks written");
+
+        // 🔥 STEP 4: Close file
         logger.log("Closing file...");
-        await this.peripheral.sendTelegram(
+        const closeReply = await this.sendTelegram(
           NXT_OPCODE.CLOSE,
           [handle],
           true,
           true,
         );
 
+        // 🔥 Check close status
+        if (!closeReply || closeReply.length < 3) {
+          throw new Error("Invalid CLOSE response");
+        }
+
+        const closeStatus = closeReply[2];
+        if (closeStatus !== 0x00) {
+          const errorMsg =
+            NXT_ERROR[closeStatus] ||
+            `Unknown error (0x${closeStatus.toString(16)})`;
+          throw new Error(`Failed to close file: ${errorMsg}`);
+        }
+
         logger.success("✅ Upload complete!");
+        logger.log("=".repeat(60));
+
         alert(
-          `✅ Program uploaded to NXT!\n\nFile: ${filename}\nSize: ${bytes.length} bytes\n\nYou can now run "${filename}" from the NXT menu.`,
+          `✅ Program uploaded successfully!\n\n` +
+            `File: ${filename}\n` +
+            `Size: ${bytes.length} bytes\n` +
+            `Chunks: ${totalChunks}\n\n` +
+            `Run "${filename}" from the NXT menu.`,
         );
       } catch (error) {
         logger.error("Upload failed:", error);
