@@ -792,7 +792,7 @@
       // Remove any existing "sprite_" prefix first (case-insensitive)
       let cleanName = name.replace(/^sprite_/i, "");
 
-      // Convert to lowercase and replace invalid characters with underscores
+      // Convert to lowercase and replace invalid characters
       let sanitized = cleanName.toLowerCase().replace(/[^a-z0-9_]/g, "_");
 
       // Remove consecutive underscores
@@ -801,7 +801,7 @@
       // Remove leading/trailing underscores
       sanitized = sanitized.replace(/^_+|_+$/g, "");
 
-      // If empty after cleaning, use default
+      // If empty, use default
       if (!sanitized) {
         sanitized = "unnamed";
       }
@@ -834,7 +834,7 @@
 
         this.logger.debug(`  Raw field value: ${value}`);
 
-        // CRITICAL FIX: Map broadcast IDs to names
+        // FIX: Map broadcast IDs to names
         if (
           (fieldName === "BROADCAST_OPTION" ||
             fieldName === "BROADCAST_INPUT") &&
@@ -845,16 +845,13 @@
           this.logger.success(
             `  ✓ Mapped broadcast field: ${value} → "${mappedName}"`,
           );
-          return mappedName;
+          return mappedName; // ✅ Return mapped name
         }
 
-        this.logger.debug(`  Returning field value: ${value}`);
         return value;
       }
 
-      this.logger.warn(
-        `  ⚠️ Field "${fieldName}" not found in block ${block.opcode}`,
-      );
+      this.logger.warn(`  ⚠️ Field "${fieldName}" not found`);
       return null;
     }
 
@@ -873,21 +870,53 @@
       return null;
     }
 
+    convertPortToNumber(port) {
+      // Convert Scratch port format to NXC IN_N format
+      // S1 → IN_1, S2 → IN_2, etc.
+
+      let portNum = port;
+
+      // Remove 'S' prefix if present
+      if (typeof port === "string" && port.startsWith("S")) {
+        portNum = port.substring(1);
+      }
+
+      // Convert 0-based to 1-based (if needed)
+      const num = parseInt(portNum, 10);
+      if (num === 0) return "1";
+
+      return String(num);
+    }
+
     getInputValue(block, inputName, blocks) {
       this.logger.debug(
-        `Getting input "${inputName}" from block ${block.opcode} (ID: ${block.id})`,
+        `Getting input "${inputName}" from block ${block.opcode}`,
       );
 
       const input = block.inputs[inputName];
       if (!input) {
-        this.logger.warn(
-          `❌ Missing input: ${inputName} in block ${block.opcode} (ID: ${block.id})`,
-        );
-        this.logger.debug(
-          `Available inputs: ${Object.keys(block.inputs).join(", ") || "none"}`,
-        );
+        this.logger.warn(`❌ Missing input: ${inputName}`);
         return "0";
       }
+
+      // ========== NEW: Special handling for BROADCAST_INPUT ==========
+      if (inputName === "BROADCAST_INPUT") {
+        // Try to get broadcast ID from field first
+        if (block.fields && block.fields.BROADCAST_OPTION) {
+          const broadcastId =
+            block.fields.BROADCAST_OPTION.value ||
+            block.fields.BROADCAST_OPTION.id;
+
+          if (this.broadcastMap && this.broadcastMap[broadcastId]) {
+            const name = this.broadcastMap[broadcastId];
+            this.logger.success(
+              `✓ Broadcast via field: ${broadcastId} → "${name}"`,
+            );
+            return `"${name}"`;
+          }
+        }
+      }
+      // ================================================================
 
       this.logger.debug(
         `Input type: ${typeof input}, isArray: ${Array.isArray(input)}`,
@@ -1435,6 +1464,64 @@
         return `sprite_${this.activeSpriteName}.direction`;
       }
 
+      // ===== NXT MENU REPORTERS =====
+      else if (opcode === "legonxt_menu_SENSOR_PORT") {
+        // Menu: S1, S2, S3, S4
+        const port = this.getFieldValue(block, "SENSOR_PORT");
+        this.logger.debug(`Menu SENSOR_PORT: ${port}`);
+        return port || "S1";
+      } else if (opcode === "legonxt_menu_MOTOR_PORT") {
+        // Menu: A, B, C
+        const port = this.getFieldValue(block, "MOTOR_PORT");
+        this.logger.debug(`Menu MOTOR_PORT: ${port}`);
+        return port || "A";
+      } else if (opcode === "legonxt_menu_LED_STATE") {
+        // Menu: on, off
+        const state = this.getFieldValue(block, "LED_STATE");
+        this.logger.debug(`Menu LED_STATE: ${state}`);
+        return state || "on";
+      } else if (opcode === "legonxt_menu_PIXEL_STATE") {
+        // Menu: on, off
+        const state = this.getFieldValue(block, "PIXEL_STATE");
+        this.logger.debug(`Menu PIXEL_STATE: ${state}`);
+        return state || "on";
+      } else if (opcode === "legonxt_menu_MOTOR_STOP") {
+        // Menu: brake, coast
+        const action = this.getFieldValue(block, "MOTOR_STOP");
+        this.logger.debug(`Menu MOTOR_STOP: ${action}`);
+        return action || "brake";
+      } else if (opcode === "legonxt_menu_COLOR_MODE") {
+        // Menu: all colors, red, green, blue, none
+        const mode = this.getFieldValue(block, "COLOR_MODE");
+        this.logger.debug(`Menu COLOR_MODE: ${mode}`);
+        return mode || "all colors";
+      } else if (opcode === "legonxt_menu_SOUND_MODE") {
+        // Menu: dBA, dB
+        const mode = this.getFieldValue(block, "SOUND_MODE");
+        this.logger.debug(`Menu SOUND_MODE: ${mode}`);
+        return mode || "dBA";
+      } else if (opcode === "legonxt_menu_RECT_FILL") {
+        // Menu: outline, filled
+        const fill = this.getFieldValue(block, "RECT_FILL");
+        this.logger.debug(`Menu RECT_FILL: ${fill}`);
+        return fill || "outline";
+      } else if (opcode === "legonxt_menu_NOTE") {
+        // Menu: C4, C#4, D4, etc.
+        const note = this.getFieldValue(block, "NOTE");
+        this.logger.debug(`Menu NOTE: ${note}`);
+        return note || "C4";
+      } else if (opcode === "legonxt_menu_PATTERN") {
+        // Menu: checkerboard, stripes-h, etc.
+        const pattern = this.getFieldValue(block, "PATTERN");
+        this.logger.debug(`Menu PATTERN: ${pattern}`);
+        return pattern || "checkerboard";
+      } else if (opcode === "legonxt_menu_REMOVE_MSG") {
+        // Menu: and remove, keep in mailbox
+        const remove = this.getFieldValue(block, "REMOVE_MSG");
+        this.logger.debug(`Menu REMOVE_MSG: ${remove}`);
+        return remove || "and remove";
+      }
+
       this.logger.warn(`Unhandled reporter block: ${opcode}`, block);
       return "0";
     }
@@ -1482,13 +1569,23 @@
         if (p === "0") p = "A";
         else if (p === "1") p = "B";
         else if (p === "2") p = "C";
-        const action = this.getInputValue(block, "ACTION", blocks).replace(
-          /"/g,
-          "",
-        );
-        this.addLine(
-          action === "brake" ? `Off(OUT_${p});` : `Float(OUT_${p});`,
-        );
+
+        // CRITICAL FIX: ACTION is a FIELD, not an INPUT (acceptReporters: false)
+        const actionRaw = this.getFieldValue(block, "ACTION") || "brake";
+        const action = String(actionRaw).toLowerCase().trim();
+
+        this.logger.debug(`Motor stop: port=${p}, action=${action}`);
+
+        if (action === "brake" || action === "bremsen") {
+          this.addLine(`Off(OUT_${p});`);
+          this.logger.success(`  → Off(OUT_${p}) [brake]`);
+        } else if (action === "coast" || action === "auslaufen") {
+          this.addLine(`Float(OUT_${p});`);
+          this.logger.success(`  → Float(OUT_${p}) [coast]`);
+        } else {
+          this.logger.error(`  ⚠️ Unexpected action: "${action}"`);
+          this.addLine(`Off(OUT_${p}); // Unknown action: ${action}`);
+        }
       } else if (
         opcode === "legonxt_resetMotorPosition" ||
         opcode === "resetMotorPosition"
@@ -1505,59 +1602,83 @@
         opcode === "legonxt_setupTouchSensorNXT" ||
         opcode === "setupTouchSensorNXT"
       ) {
+        this.logger.debug(`Processing touch sensor setup`);
+
         const p = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
         let n = p.replace("S", "");
         if (n === "0") n = "1";
-        this.addLine(`SetSensorTouch(IN_${n});`);
+
         this.sensorSetup.add(`touch_S${n}`);
+        this.logger.success(`  ✓ Tracked: touch_S${n}`);
       } else if (
         opcode === "legonxt_setupLightSensor" ||
         opcode === "setupLightSensor"
       ) {
+        this.logger.log(`🔴 SETUP LIGHT SENSOR HANDLER CALLED`);
+        this.logger.log(`  sensorSetup before:`, Array.from(this.sensorSetup));
+
         const p = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
-        const state = this.getInputValue(block, "STATE", blocks).replace(
-          /"/g,
-          "",
-        );
+        const stateRaw = this.getFieldValue(block, "STATE");
+        const state = String(stateRaw || "on")
+          .toLowerCase()
+          .trim();
+
         let n = p.replace("S", "");
         if (n === "0") n = "1";
-        this.addLine(
-          state === "on"
-            ? `SetSensorLight(IN_${n});`
-            : `SetSensorLowspeed(IN_${n});`,
-        );
-        this.sensorSetup.add(`light_S${n}`);
+
+        this.logger.log(`  Port: S${n}, LED: ${state}`);
+
+        if (state === "on" || state === "an" || state === "ein") {
+          this.sensorSetup.add(`light_S${n}_on`);
+          this.logger.log(`  Added: light_S${n}_on`);
+        } else {
+          this.sensorSetup.add(`light_S${n}_off`);
+          this.logger.log(`  Added: light_S${n}_off`);
+        }
+
+        this.logger.log(`  sensorSetup after:`, Array.from(this.sensorSetup));
       } else if (
         opcode === "legonxt_setupColorSensor" ||
         opcode === "setupColorSensor"
       ) {
+        this.logger.debug(`Processing color sensor setup`);
+
         const port = this.getInputValue(block, "PORT", blocks).replace(
           /"/g,
           "",
         );
         const sensorNum = port.replace("S", "");
-        this.addLine(`SetSensorColorFull(IN_${sensorNum});`);
-        this.sensorSetup.add(`color_${port}`);
+
+        this.sensorSetup.add(`color_S${sensorNum}`);
+        this.logger.success(`  ✓ Tracked: color_S${sensorNum}`);
       } else if (
         opcode === "legonxt_setupSoundSensor" ||
         opcode === "setupSoundSensor"
       ) {
+        this.logger.debug(`Processing sound sensor setup`);
+
         const port = this.getInputValue(block, "PORT", blocks).replace(
           /"/g,
           "",
         );
         const sensorNum = port.replace("S", "");
-        this.addLine(`SetSensorSound(IN_${sensorNum});`);
-        this.sensorSetup.add(`sound_${port}`);
+
+        this.sensorSetup.add(`sound_S${sensorNum}`);
+        this.logger.success(`  ✓ Tracked: sound_S${sensorNum}`);
       } else if (
         opcode === "legonxt_setupUltrasonicSensor" ||
         opcode === "setupUltrasonicSensor"
       ) {
+        this.logger.debug(`Processing ultrasonic sensor setup`);
+
         const p = this.getInputValue(block, "PORT", blocks).replace(/"/g, "");
         let n = p.replace("S", "");
         if (n === "0") n = "1";
-        this.addLine(`SetSensorLowspeed(IN_${n});`);
+
+        this.logger.debug(`  Port: S${n}`);
+
         this.sensorSetup.add(`ultrasonic_S${n}`);
+        this.logger.success(`  ✓ Tracked: ultrasonic_S${n}`);
       }
 
       // ===== NXT SOUND BLOCKS =====
@@ -1617,12 +1738,22 @@
       } else if (opcode === "legonxt_drawPixel" || opcode === "drawPixel") {
         const x = this.getInputValue(block, "X", blocks);
         const y = this.getInputValue(block, "Y", blocks);
-        const state = this.getInputValue(block, "STATE", blocks).replace(
-          /"/g,
-          "",
-        );
-        if (state === "on") {
+
+        // CRITICAL FIX: STATE is a FIELD, not an INPUT (acceptReporters: false)
+        const stateRaw = this.getFieldValue(block, "STATE") || "on";
+        const state = String(stateRaw).toLowerCase().trim();
+
+        this.logger.debug(`Draw pixel: (${x}, ${y}), state=${state}`);
+
+        if (state === "on" || state === "an" || state === "ein") {
           this.addLine(`PointOut(${x}, ${y});`);
+          this.logger.success(`  → PointOut(${x}, ${y}) [on]`);
+        } else if (state === "off" || state === "aus") {
+          this.addLine(`// Clear pixel at (${x}, ${y}) - not supported`);
+          this.logger.debug(`  → Skipped [off]`);
+        } else {
+          this.logger.error(`  ⚠️ Unexpected state: "${state}"`);
+          this.addLine(`PointOut(${x}, ${y}); // Unknown state: ${state}`);
         }
       } else if (opcode === "legonxt_drawLine" || opcode === "drawLine") {
         const x1 = this.getInputValue(block, "X1", blocks);
@@ -1758,13 +1889,9 @@
         const y = this.getInputValue(block, "Y", blocks);
         const sprite = `sprite_${this.activeSpriteName}`;
 
-        // Only generate assignment if value is different from current
-        if (x !== `${sprite}.x`) {
-          this.addLine(`${sprite}.x = ${x};`);
-        }
-        if (y !== `${sprite}.y`) {
-          this.addLine(`${sprite}.y = ${y};`);
-        }
+        // ALWAYS generate assignments
+        this.addLine(`${sprite}.x = ${x};`);
+        this.addLine(`${sprite}.y = ${y};`);
 
         this.logger.debug(`  Set position to (${x}, ${y})`);
       }
@@ -1872,32 +1999,79 @@
         opcode === "event_broadcast" ||
         opcode === "event_broadcastandwait"
       ) {
-        this.logger.debug(`Processing broadcast block: ${opcode}`);
+        this.logger.debug(`\n=== PROCESSING BROADCAST ===`);
 
-        // Try to get the broadcast name/ID from the input
-        const broadcastInput = this.getInputValue(
-          block,
-          "BROADCAST_INPUT",
-          blocks,
-        );
-        this.logger.debug(`  Broadcast input: ${broadcastInput}`);
+        // STEP 1: Try to get broadcast value from field OR input
+        let broadcastValue = null;
 
-        // Remove quotes if present
-        let broadcastName = broadcastInput.replace(/"/g, "");
+        if (block.fields && block.fields.BROADCAST_OPTION) {
+          broadcastValue =
+            block.fields.BROADCAST_OPTION.value ||
+            block.fields.BROADCAST_OPTION.id ||
+            block.fields.BROADCAST_OPTION.name;
+          this.logger.debug(`Got from field: "${broadcastValue}"`);
+        }
 
-        // If it's still an ID, try to map it
-        if (this.broadcastMap && this.broadcastMap[broadcastName]) {
-          broadcastName = this.broadcastMap[broadcastName];
-          this.logger.debug(`  Mapped to: ${broadcastName}`);
+        if (!broadcastValue && block.inputs && block.inputs.BROADCAST_INPUT) {
+          const input = block.inputs.BROADCAST_INPUT;
+          if (
+            typeof input === "object" &&
+            !Array.isArray(input) &&
+            input.shadow
+          ) {
+            const shadowBlock = blocks._blocks[input.shadow];
+            if (
+              shadowBlock &&
+              shadowBlock.fields &&
+              shadowBlock.fields.BROADCAST_OPTION
+            ) {
+              broadcastValue =
+                shadowBlock.fields.BROADCAST_OPTION.value ||
+                shadowBlock.fields.BROADCAST_OPTION.id ||
+                shadowBlock.fields.BROADCAST_OPTION.name;
+              this.logger.debug(`Got from shadow: "${broadcastValue}"`);
+            }
+          }
+        }
+
+        // STEP 2: Determine if this is an ID or a name
+        let broadcastName = broadcastValue || "unknown";
+
+        this.logger.debug(`\n=== BROADCAST MAPPING ===`);
+        this.logger.debug(`Raw value: "${broadcastValue}"`);
+        this.logger.debug(`Broadcast map:`, this.broadcastMap);
+
+        // Check if it's an ID in the map
+        if (
+          this.broadcastMap &&
+          broadcastValue &&
+          this.broadcastMap[broadcastValue]
+        ) {
+          broadcastName = this.broadcastMap[broadcastValue];
+          this.logger.success(
+            `✓ Mapped ID: "${broadcastValue}" → "${broadcastName}"`,
+          );
+        }
+        // Check if the value IS a name (reverse lookup)
+        else if (this.broadcastMap && broadcastValue) {
+          const isName = Object.values(this.broadcastMap).includes(
+            broadcastValue,
+          );
+          if (isName) {
+            broadcastName = broadcastValue;
+            this.logger.success(`✓ Already a name: "${broadcastName}"`);
+          } else {
+            this.logger.warn(
+              `⚠️ Not found in map, using as-is: "${broadcastValue}"`,
+            );
+          }
         }
 
         const funcName = `on_broadcast_${this.sanitizeName(broadcastName)}`;
-        this.addLine(`${funcName}(); // Triggering: ${broadcastName}`);
+        this.addLine(`${funcName}(); // Broadcast: ${broadcastName}`);
 
-        this.logger.success(`  ✓ Generated call to ${funcName}`);
-      } else {
-        this.logger.warn(`Unhandled command block: ${opcode}`);
-        this.addLine(`// TODO: ${opcode}`);
+        this.logger.success(`✓ Generated: ${funcName}()`);
+        this.logger.debug(`=== END BROADCAST ===\n`);
       }
     }
 
@@ -2027,32 +2201,78 @@
     }
 
     generateSensorSetup() {
-      this.logger.debug(
-        `Generating sensor setup (${this.sensorSetup.size} sensors)`,
-      );
+      this.logger.log("\n=== GENERATING SENSOR SETUP ===");
+      this.logger.log(`Sensor setup size: ${this.sensorSetup.size}`);
+      this.logger.log(`Sensor setup contents:`, Array.from(this.sensorSetup));
 
-      // ALWAYS generate the function, even if empty
+      // ALWAYS generate the function
       this.addLine("// Initialize sensors");
       this.addLine("sub InitSensors() {");
       this.increaseIndent();
 
       if (this.sensorSetup.size === 0) {
         this.addLine("// No sensors to initialize");
+        this.logger.warn("  ⚠️ No sensors tracked");
       } else {
+        // Parse sensor setup strings
+        const sensors = [];
+
         for (const sensor of this.sensorSetup) {
-          const [type, port] = sensor.split("_");
-          const sensorNum = port.replace("S", "");
+          this.logger.debug(`  Parsing sensor: "${sensor}"`);
+
+          // Format: "type_Sn_extra" or "type_Sn"
+          // Examples: "light_S1_on", "ultrasonic_S2", "touch_S1"
+          const match = sensor.match(/^(\w+)_S(\d)(?:_(\w+))?$/);
+
+          if (match) {
+            const type = match[1]; // "light", "ultrasonic", "touch", etc.
+            const portNum = match[2]; // "1", "2", "3", "4"
+            const extra = match[3] || ""; // "on", "off", or empty
+
+            sensors.push({ type, portNum, extra, original: sensor });
+            this.logger.debug(
+              `    ✓ Parsed: type=${type}, port=${portNum}, extra=${extra}`,
+            );
+          } else {
+            this.logger.error(`    ❌ Failed to parse: "${sensor}"`);
+          }
+        }
+
+        // Sort by port number
+        sensors.sort((a, b) => parseInt(a.portNum) - parseInt(b.portNum));
+
+        this.logger.log(
+          `  Generating setup code for ${sensors.length} sensor(s):`,
+        );
+
+        // Generate setup code
+        for (const sensor of sensors) {
+          const { type, portNum, extra } = sensor;
 
           if (type === "touch") {
-            this.addLine(`SetSensorTouch(IN_${sensorNum});`);
+            this.addLine(`SetSensorTouch(IN_${portNum});`);
+            this.logger.log(`    ✓ SetSensorTouch(IN_${portNum})`);
           } else if (type === "light") {
-            this.addLine(`SetSensorLight(IN_${sensorNum});`);
+            if (extra === "on") {
+              this.addLine(`SetSensorLight(IN_${portNum});`);
+              this.logger.log(`    ✓ SetSensorLight(IN_${portNum}) [LED on]`);
+            } else {
+              this.addLine(`SetSensorLowspeed(IN_${portNum});`);
+              this.logger.log(
+                `    ✓ SetSensorLowspeed(IN_${portNum}) [LED off]`,
+              );
+            }
           } else if (type === "sound") {
-            this.addLine(`SetSensorSound(IN_${sensorNum});`);
+            this.addLine(`SetSensorSound(IN_${portNum});`);
+            this.logger.log(`    ✓ SetSensorSound(IN_${portNum})`);
           } else if (type === "ultrasonic") {
-            this.addLine(`SetSensorLowspeed(IN_${sensorNum});`);
+            this.addLine(`SetSensorLowspeed(IN_${portNum});`);
+            this.logger.log(`    ✓ SetSensorLowspeed(IN_${portNum})`);
           } else if (type === "color") {
-            this.addLine(`SetSensorColorFull(IN_${sensorNum});`);
+            this.addLine(`SetSensorColorFull(IN_${portNum});`);
+            this.logger.log(`    ✓ SetSensorColorFull(IN_${portNum})`);
+          } else {
+            this.logger.error(`    ❌ Unknown sensor type: "${type}"`);
           }
         }
       }
@@ -2060,6 +2280,8 @@
       this.decreaseIndent();
       this.addLine("}");
       this.addLine("");
+
+      this.logger.log("=== SENSOR SETUP COMPLETE ===\n");
     }
 
     generateSpriteStateManager() {
@@ -2103,6 +2325,51 @@
       this.decreaseIndent();
       this.addLine("}");
       this.addLine("");
+    }
+
+    collectAllReferencedSprites(targets) {
+      const referencedSprites = new Set();
+
+      // Collect sprite names from all sprite state blocks
+      for (const target of targets) {
+        const blocks = target.blocks._blocks;
+        for (const blockId in blocks) {
+          const block = blocks[blockId];
+
+          // Check sprite state blocks
+          if (
+            (block.opcode && block.opcode.includes("spriteGet")) ||
+            block.opcode.includes("spriteSet")
+          ) {
+            const spriteInput = block.inputs.SPRITE;
+            if (spriteInput) {
+              const spriteName = this.extractSpriteName(spriteInput, blocks);
+              if (spriteName) {
+                referencedSprites.add(spriteName);
+              }
+            }
+          }
+        }
+      }
+
+      return Array.from(referencedSprites);
+    }
+
+    // HELPER:
+    extractSpriteName(input, blocks) {
+      if (typeof input === "object" && !Array.isArray(input)) {
+        if (input.shadow) {
+          const shadowBlock = blocks._blocks[input.shadow];
+          if (shadowBlock && shadowBlock.fields && shadowBlock.fields.TEXT) {
+            return shadowBlock.fields.TEXT.value;
+          }
+        }
+      } else if (Array.isArray(input) && input.length >= 2) {
+        if (input[0] === 1 && Array.isArray(input[1])) {
+          return input[1][1]; // Primitive string
+        }
+      }
+      return null;
     }
 
     transpileProject() {
@@ -2154,6 +2421,21 @@
         }
         this.logger.success(`\n✓ Collected ${spriteCount} sprite state(s)`);
 
+        const referencedSprites = this.collectAllReferencedSprites(targets);
+        for (const spriteName of referencedSprites) {
+          if (!this.spriteStates[spriteName]) {
+            // Initialize referenced but not scripted sprites
+            this.spriteStates[spriteName] = {
+              x: 0,
+              y: 0,
+              direction: 90,
+              size: 100,
+              visible: true,
+            };
+            this.logger.log(`  Added referenced sprite: "${spriteName}"`);
+          }
+        }
+
         // ==================== STEP 2: BUILD BROADCAST MAP ====================
         this.logger.log("\n" + "=".repeat(70));
         this.logger.log("STEP 2: BUILDING BROADCAST MAP");
@@ -2165,13 +2447,19 @@
         // Check stage variables
         const stage = runtime.getTargetForStage();
         if (stage && stage.variables) {
-          this.logger.log("\n  Checking Stage variables...");
+          this.logger.log("\n  Checking the Stage variables...");
           for (const varId in stage.variables) {
             const variable = stage.variables[varId];
+            this.logger.debug(
+              `    Variable: id="${varId}", name="${variable.name}", type="${variable.type}"`,
+            );
+
             if (variable.type === "broadcast_msg") {
               this.broadcastMap[varId] = variable.name;
               broadcastCount++;
-              this.logger.log(`    ✓ Mapped: ${varId} → "${variable.name}"`);
+              this.logger.success(
+                `    ✓ Mapped broadcast: "${varId}" → "${variable.name}"`,
+              );
             }
           }
         }
