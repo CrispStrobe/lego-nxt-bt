@@ -1,8 +1,10 @@
 # TurboWarp Extensions (mostly for LEGO Hubs)
 
-For some of these, if you use them on Desktop (Windows, MacOS), you need the LEGO SratchLink software as a bridge. Alternatively, some of my extensions support a custom bridge.
+For some of these, if you use them on Desktop (Windows, MacOS), you need the LEGO SratchLink software as a bridge. Alternatively, some of these extensions support a custom (Websocket) bridge.
 
 For most most these, you must disable Sandbox Mode in TurboWarp.
+
+For iOS, you might try them in Scrub App which provides a ScratchLink-like functionality (https://github.com/bricklife/Scrub) (this is untested yet).
 
 ## LEGO Spike Prime = Robot Inventor Hub
 
@@ -41,6 +43,10 @@ For this, you need **ev3_transpile.js** extension in TurboWarp.
 This is all work in progress.
 
 ## LEGO NXT
+
+**legonxt_transpile_scratchlink.js** works with ScratchLink and gives you the option to transpile the Codeblocks to NXC and then compile them to RXE files which the NXT Brick can run directly. 
+
+(There are other, yet incomplete legonxt_transpile_direct and legonxt_transpile_bridge scripts. I might bring those up to feature parity sometime, but they were mostly for testing only.)
 
 **legonxt-direct.js** will give you direct control of the NXT Brick. Note you probably must beforehand connect over your device Bluetooth Settings the Brick, then you will have it available for TurboWarp.
 
