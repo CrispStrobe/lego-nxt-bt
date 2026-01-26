@@ -46,6 +46,8 @@ This is all work in progress.
 
 **legonxt_transpile_scratchlink.js** works with ScratchLink and gives you the option to transpile the Codeblocks to NXC and then compile them to RXE files which the NXT Brick can run directly. 
 
+The compilation needs internet connectivity, because it uses a REST API which wraps NBC (https://bricxcc.sourceforge.net/nbc/) and lsmasm (https://github.com/ev3dev/lmsasm) at https://lego-compiler.vercel.app/ (source: https://github.com/CrispStrobe/legacy-lego-compiler).
+
 (There are other, yet incomplete legonxt_transpile_direct and legonxt_transpile_bridge scripts. I might bring those up to feature parity sometime, but they were mostly for testing only.)
 
 **legonxt-direct.js** will give you direct control of the NXT Brick. Note you probably must beforehand connect over your device Bluetooth Settings the Brick, then you will have it available for TurboWarp.
