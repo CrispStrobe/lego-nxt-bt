@@ -14,7 +14,7 @@ For iOS, you might try them in Scrub App which provides a ScratchLink-like funct
 | **LEGO Spike Prime** | [`legospikeprime_btc_scratchlink.js`](./legospikeprime_btc_scratchlink.js), [`legospikeprime_ble.js`](./legospikeprime_ble.js), [`legospike_ble.js`](./legospike_ble.js), [`legospike_bridge.js`](./legospike_bridge.js) |
 | **LEGO Boost** | [`legoboost_scratchlink.js`](./legoboost_scratchlink.js), [`legoboost_ble.js`](./legoboost_ble.js), [`legoboost_turbowarp.js`](./legoboost_turbowarp.js) |
 | **LEGO EV3** | [`ev3_btc.js`](./ev3_btc.js), [`ev3_lms_transpile.js`](./ev3_lms_transpile.js), [`ev3_transpile.js`](./ev3_transpile.js) |
-| **LEGO NXT** | [`legonxt_transpile_scratchlink.js`](./legonxt_transpile_scratchlink.js), [`legonxt_transpile_direct.js`](./legonxt_transpile_direct.js), [`legonxt_transpile_bridge.js`](./legonxt_transpile_bridge.js), [`legonxt-direct.js`](./legonxt-direct.js), [`legonxt_turbowarp.js`](./legonxt_turbowarp.js) |
+| **LEGO NXT** | [`legonxt_transpile_universal.js`](./legonxt_transpile_universal.js), [`legonxt_transpile_scratchlink.js`](./legonxt_transpile_scratchlink.js), [`legonxt_transpile_direct.js`](./legonxt_transpile_direct.js), [`legonxt_transpile_bridge.js`](./legonxt_transpile_bridge.js), [`legonxt-direct.js`](./legonxt-direct.js), [`legonxt_turbowarp.js`](./legonxt_turbowarp.js) |
 | **Math/Utilities** | [`csp.js`](./csp.js), [`planetemaths.js`](./planetemaths.js), [`arrays.js`](./arrays.js), [`gamepad.js`](./gamepad.js) |
 | **Python Bridges** | [`nxt_bridge.py`](./nxt_bridge.py), [`ev3_ondevice_bridge.py`](./ev3_ondevice_bridge.py), [`lego_bridge.py`](./lego_bridge.py) |
 
@@ -73,6 +73,8 @@ With ev3dev, you have Linux on the device and can do lots of cool things.
 ## LEGO NXT
 
 ### Transpilation Extensions (Scratch → NXC → RXE)
+
+**[`legonxt_transpile_universal.js`](./legonxt_transpile_universal.js)** ⭐ - Should include all connection option, ScratchLink, BTC and Bridge. Gives you the option to transpile code blocks to NXC and then compile them to RXE files which the NXT Brick can run directly. Must be thoroughly tested though.
 
 **[`legonxt_transpile_scratchlink.js`](./legonxt_transpile_scratchlink.js)** ⭐ **RECOMMENDED** - Works with ScratchLink and gives you the option to transpile code blocks to NXC and then compile them to RXE files which the NXT Brick can run directly.
 
