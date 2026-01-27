@@ -1036,9 +1036,8 @@
     }
   }
 
-  // ==================== NXT PERIPHERAL CLASS (keep existing) ====================
-  // [Keep the entire existing NXTPeripheral class here - lines 252-1747 from the original]
-
+  // ==================== NXT PERIPHERAL CLASS ====================
+  
   class NXTPeripheral {
     constructor(runtime) {
       this.runtime = runtime;
