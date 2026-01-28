@@ -1106,12 +1106,17 @@
 
   // Scratch Link Connection Adapter
   class ScratchLinkAdapter extends ConnectionAdapter {
-    constructor() {
+    constructor(runtime, extensionId) {
       super();
+      this._runtime = runtime;
+      this._extensionId = extensionId;
       this._ws = null;
       this._requestId = 0;
       this._requests = new Map();
-      logger.info("Scratch Link Adapter initialized");
+      logger.info("Scratch Link Adapter initialized", {
+        hasRuntime: !!runtime,
+        extensionId
+      });
     }
 
     async connect() {
@@ -1124,6 +1129,12 @@
 
           this._ws.onopen = () => {
             logger.info("✓ WebSocket connected");
+            
+            // Emit that we're ready to discover
+            if (this._runtime) {
+              this._runtime.emit(this._runtime.constructor.PERIPHERAL_SCAN_TIMEOUT);
+            }
+            
             this._sendRequest("discover", {
               filters: [
                 {
@@ -1133,6 +1144,15 @@
             })
               .then((device) => {
                 logger.info(`Device discovered: ${device.name || "Unknown"}`);
+                
+                // Emit peripheral list update
+                if (this._runtime) {
+                  this._runtime.emit(
+                    this._runtime.constructor.PERIPHERAL_LIST_UPDATE,
+                    { [device.peripheralId]: device }
+                  );
+                }
+                
                 return this._sendRequest("connect", { peripheralId: device.peripheralId });
               })
               .then(() => {
@@ -1145,6 +1165,12 @@
               .then(() => {
                 logger.info("✓ Notifications started");
                 this._connected = true;
+                
+                // Emit connected event
+                if (this._runtime) {
+                  this._runtime.emit(this._runtime.constructor.PERIPHERAL_CONNECTED);
+                }
+                
                 resolve(true);
               })
               .catch(reject);
@@ -1152,6 +1178,14 @@
 
           this._ws.onerror = (error) => {
             logger.error("WebSocket error:", error);
+            
+            if (this._runtime) {
+              this._runtime.emit(this._runtime.constructor.PERIPHERAL_REQUEST_ERROR, {
+                message: "Scratch lost connection to LEGO Powered Up",
+                extensionId: this._extensionId,
+              });
+            }
+            
             reject(error);
           };
 
@@ -1183,6 +1217,13 @@
           this._ws.onclose = () => {
             logger.warn("WebSocket closed");
             this._connected = false;
+            
+            if (this._runtime) {
+              this._runtime.emit(this._runtime.constructor.PERIPHERAL_CONNECTION_LOST_ERROR, {
+                message: "Scratch lost connection to LEGO Powered Up",
+                extensionId: this._extensionId,
+              });
+            }
           };
         });
       } catch (error) {
@@ -1376,8 +1417,24 @@
   // ============================================================================
 
   class PoweredUpHub {
-    constructor(connectionType, bridgeUrl) {
+    constructor(runtime, extensionId, connectionType, bridgeUrl) {
       logger.info(`Initializing Powered Up Hub with connection type: ${connectionType}`);
+      
+      this._runtime = runtime;
+      this._extensionId = extensionId;
+      
+      // Only register if runtime is available
+      if (this._runtime) {
+        try {
+          this._runtime.registerPeripheralExtension(extensionId, this);
+          this._runtime.on("PROJECT_STOP_ALL", this.stopAll.bind(this));
+          logger.info("Registered as peripheral extension");
+        } catch (error) {
+          logger.warn("Could not register peripheral extension:", error);
+        }
+      } else {
+        logger.warn("No runtime available - peripheral features may be limited");
+      }
       
       // Create appropriate connection adapter
       switch (connectionType) {
@@ -1385,7 +1442,7 @@
           this._connection = new BLEAdapter();
           break;
         case ConnectionType.SCRATCH_LINK:
-          this._connection = new ScratchLinkAdapter();
+          this._connection = new ScratchLinkAdapter(runtime, extensionId);
           break;
         case ConnectionType.BRIDGE:
           this._connection = new BridgeAdapter(bridgeUrl);
@@ -1426,6 +1483,56 @@
 
       logger.info("Powered Up Hub initialized");
     }
+
+    // Required peripheral interface methods
+    scan() {
+      logger.info("Peripheral scan requested");
+      // For ScratchLink, the connection adapter handles scanning
+      if (this._connectionType === ConnectionType.SCRATCH_LINK) {
+        if (!this._connection) {
+          this._connection = new ScratchLinkAdapter();
+          this._connection.onMessage((data) => this._onMessage(data));
+        }
+        return this._connection.connect();
+      }
+    }
+
+    connectPeripheral(id) {
+      logger.info(`Connect to peripheral: ${id}`);
+      if (this._connection && this._connection.connectPeripheral) {
+        return this._connection.connectPeripheral(id);
+      }
+    }
+
+    getPeripheralIsConnected() {
+      return this.isConnected();
+    }
+
+    _getStatus() {
+      logger.debug("Get status called");
+      const connected = this.isConnected();
+      return {
+        status: connected ? 2 : 1,
+        msg: connected ? "Connected" : "Disconnected"
+      };
+    }
+
+    // rest of the class methods
+
+    stopAll() {
+      if (!this.isConnected()) return;
+      this.stopAllMotors();
+    }
+    
+    stopAllMotors() {
+      Object.values(this._devices).forEach(device => {
+        if (device instanceof PoweredUpMotor) {
+          device.turnOff(false);
+        }
+      });
+    }
+
+
 
     async connect() {
       logger.info("Connecting Powered Up Hub...");
@@ -1982,13 +2089,30 @@
   // ============================================================================
 
   class LEGOPoweredUpExtension {
-    constructor() {
+    constructor(runtime) {
       logger.info("=".repeat(60));
       logger.info("LEGO Powered Up Unified Extension");
       logger.info("=".repeat(60));
       
+      // Get runtime - try multiple sources
+      this._runtime = runtime;
+      
+      // If runtime not passed, try to get it from Scratch global
+      if (!this._runtime && typeof Scratch !== "undefined" && Scratch.vm) {
+        this._runtime = Scratch.vm.runtime;
+        logger.info("Got runtime from Scratch.vm.runtime");
+      }
+      
+      // Last resort - try vm global
+      if (!this._runtime && typeof vm !== "undefined") {
+        this._runtime = vm.runtime;
+        logger.info("Got runtime from vm.runtime");
+      }
+      
+      logger.info("Runtime available:", !!this._runtime);
+      
       this._hub = null;
-      this._connectionType = ConnectionType.BLE;
+      this._connectionType = ConnectionType.SCRATCH_LINK;
       this._bridgeUrl = "http://localhost:8080";
       
       logger.info("Extension initialized");
@@ -2002,6 +2126,7 @@
         color2: "#F05A24",
         color3: "#E0491D",
         blockIconURI: iconURI,
+        showStatusButton: true,
         blocks: [
           // Connection blocks
           {
@@ -2666,7 +2791,14 @@
         }
 
         logger.info(`Connection type: ${this._connectionType}`);
-        this._hub = new PoweredUpHub(this._connectionType, this._bridgeUrl);
+        
+        // Pass runtime and extensionId to hub
+        this._hub = new PoweredUpHub(
+          this._runtime,
+          "legopoweredup",  // Must match the id in getInfo()
+          this._connectionType,
+          this._bridgeUrl
+        );
         
         await this._hub.connect();
         logger.info("✓ Successfully connected");
