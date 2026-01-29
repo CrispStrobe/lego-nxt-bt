@@ -8,7 +8,7 @@
   const translations = {
     en: {
       // Extension Info
-      extensionName: "Scratch to EV3",
+      extensionName: "ev3dev",
 
       // Connection
       connection: "Connection",
