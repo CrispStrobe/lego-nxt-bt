@@ -103,8 +103,9 @@
     showNXCCode: "show generated NXC code",
     downloadNXC: "download as .nxc file",
     compileToRXE: "compile NXC to .rxe",
-    uploadToNXT: "upload program to NXT",
-    fullWorkflow: "🚀 transpile → compile → upload",
+    uploadToNXT: "upload program as [FILENAME] to NXT",
+    fullWorkflow: "🚀 workflow: transpile → compile → upload as [FILENAME]",
+    setRxeFilename: "set program name to [NAME]",
     
     // Device Info
     getDeviceName: "NXT name",
@@ -250,8 +251,9 @@
     showNXCCode: "Zeige generierten NXC-Code",
     downloadNXC: "Als .nxc-Datei herunterladen",
     compileToRXE: "NXC zu .rxe kompilieren",
-    uploadToNXT: "Programm zum NXT hochladen",
-    fullWorkflow: "🚀 transpilieren → kompilieren → hochladen",
+    uploadToNXT: "Programm als [FILENAME] zum NXT hochladen",
+    fullWorkflow: "🚀 Workflow: transpilieren → kompilieren → als [FILENAME] hochladen",
+    setRxeFilename: "Programmname auf [NAME] setzen",
     
     // Device Info
     getDeviceName: "NXT-Name",
@@ -3603,11 +3605,12 @@ if (Object.keys(this.spriteStates).length > 0) {
 if (mainScripts.length > 0) {
   for (const scriptName of mainScripts) {
     this.addLine(`StartTask(${scriptName});`);
-    this.logger.log(`    ✓ Added StartTask(${scriptName})`);
   }
+  
+  // Wait long enough for tones to finish, then the program exits naturally
+    this.addLine("Wait(5000); // Give sub-tasks time to run");
 } else {
-  this.addLine("// No green flag scripts found");
-  this.logger.warn("    ⚠️ No green flag scripts found");
+  this.addLine("// No scripts found");
 }
 
 this.decreaseIndent();
@@ -5842,14 +5845,37 @@ this.addLine("}");
         text: t("compileToRXE"),
       },
       {
+        opcode: "setRxeFilename",
+        blockType: Scratch.BlockType.COMMAND,
+        text: t("setRxeFilename"),
+        arguments: {
+          NAME: {
+            type: Scratch.ArgumentType.STRING,
+            defaultValue: "program.rxe"
+          }
+        }
+      },
+      {
         opcode: "uploadToNXT",
         blockType: Scratch.BlockType.COMMAND,
-        text: t("uploadToNXT"),
+        text: t("uploadToNXT"), 
+        arguments: {
+          FILENAME: {
+            type: Scratch.ArgumentType.STRING,
+            defaultValue: "program.rxe"
+          }
+        }
       },
       {
         opcode: "fullWorkflow",
         blockType: Scratch.BlockType.COMMAND,
-        text: t("fullWorkflow"),
+        text: t("fullWorkflow"), 
+        arguments: {
+          FILENAME: {
+            type: Scratch.ArgumentType.STRING,
+            defaultValue: "program.rxe"
+          }
+        }
       },
 
       "---",
@@ -6889,41 +6915,55 @@ this.addLine("}");
       }
     }
 
-    async uploadToNXT() {
+    setRxeFilename(args) {
+      let name = Cast.toString(args.NAME);
+      // Ensure it has the .rxe extension or the NXT won't show it in the files menu
+      if (!name.toLowerCase().endsWith(".rxe")) {
+        name += ".rxe";
+      }
+      this.rxeFilename = name;
+      logger.log(`Target filename set to: ${this.rxeFilename}`);
+    }
+
+    async uploadToNXT(args) { // args to accept the filename from the block
       logger.log("=".repeat(60));
       logger.log("UPLOAD RXE TO NXT");
       logger.log("=".repeat(60));
 
-      if (!this.rxeBase64) {
-        alert("⚠️ Compile to .rxe first using 'compile NXC to .rxe' block!");
-        return;
-      }
+      // 1. GET FILENAME FROM ARGS (or fallback)
+      const filename = args.FILENAME || this.rxeFilename || "program.rxe";
 
-      if (!this.peripheral.isConnected()) {
-        alert("⚠️ Connect to NXT first using 'connect to NXT' block!");
+      if (!this.rxeBase64) {
+        alert("⚠️ Compile to .rxe first!");
         return;
       }
 
       try {
-        logger.log("Decoding base64 RXE data...");
         const binaryString = atob(this.rxeBase64);
         const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+
+        // Prepare filename bytes
+        const filenameBytes = new Array(20).fill(0);
+        for (let i = 0; i < Math.min(filename.length, 19); i++) {
+          filenameBytes[i] = filename.charCodeAt(i);
         }
 
-        logger.log(`File size: ${bytes.length} bytes`);
-
-        const filename = "program.rxe";
-
-        const filenameBytes = [];
-        for (let i = 0; i < filename.length && i < 19; i++) {
-          filenameBytes.push(filename.charCodeAt(i));
+        logger.log(`Cleaning up old version of "${filename}"...`);
+        try {
+          // Send DELETE command (0x85)
+          await this.peripheral.sendTelegram(
+            NXT_OPCODE.DELETE,
+            filenameBytes,
+            true,  // requireReply
+            true   // isSystemCmd
+          );
+          logger.log("Existing file deleted or not found.");
+        } catch (e) {
+          // We ignore errors here because if the file didn't exist, DELETE returns an error.
+          logger.debug("Delete attempt finished (file might not have existed).");
         }
-        while (filenameBytes.length < 20) {
-          filenameBytes.push(0);
-        }
-
+        
         logger.log(`Opening file "${filename}" for writing...`);
         logger.debug(`Filename bytes: [${filenameBytes.join(", ")}]`);
 
@@ -7027,18 +7067,20 @@ this.addLine("}");
       }
     }
 
-    async fullWorkflow() {
+    async fullWorkflow(args) {
       logger.log("=".repeat(60));
       logger.log("FULL WORKFLOW: TRANSPILE → COMPILE → UPLOAD");
       logger.log("=".repeat(60));
 
       try {
+        const filename = args.FILENAME || this.rxeFilename || "program.rxe";
+
         // Step 1: Transpile
         logger.log("\n[1/3] Transpiling project...");
         this.transpiler.spriteStates = { ...this.spriteStates };
         this.nxcCode = this.transpiler.transpileProject();
         logger.success("✅ Transpilation complete");
-        await this.peripheral.sleep(500);
+        await this.peripheral.sleep(200);
 
         // Step 2: Compile
         logger.log("\n[2/3] Compiling to bytecode...");
@@ -7048,95 +7090,21 @@ this.addLine("}");
           body: JSON.stringify({ compiler: "nxc", code: this.nxcCode }),
         });
 
-        if (!response.ok) {
-          throw new Error(`Compilation failed: HTTP ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`Compilation failed: HTTP ${response.status}`);
         const result = await response.json();
-        if (!result.success) {
-          throw new Error(result.error || "Compilation failed");
-        }
+        if (!result.success) throw new Error(result.error || "Compilation failed");
 
         this.rxeBase64 = result.base64;
         logger.success("✅ Compilation complete");
-        await this.peripheral.sleep(500);
+        await this.peripheral.sleep(200);
 
-        // Step 3: Upload
-        if (!this.peripheral.isConnected()) {
-          throw new Error("NXT not connected! Please connect first.");
-        }
-
+        // Step 3: Upload (Calls the separate upload method to ensure clean logic)
         logger.log("\n[3/3] Uploading to NXT...");
-        const binaryString = atob(this.rxeBase64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
+        await this.uploadToNXT({ FILENAME: filename });
 
-        const filename = "program.rxe";
-        const filenameBytes = new Array(20).fill(0);
-        for (let i = 0; i < Math.min(filename.length, 19); i++) {
-          filenameBytes[i] = filename.charCodeAt(i);
-        }
-
-        const openCmd = [
-          ...filenameBytes,
-          bytes.length & 0xff,
-          (bytes.length >> 8) & 0xff,
-          (bytes.length >> 16) & 0xff,
-          (bytes.length >> 24) & 0xff,
-        ];
-
-        const openReply = await this.peripheral.sendTelegram(
-          NXT_OPCODE.OPEN_WRITE,
-          openCmd,
-          true,
-          true,
-        );
-
-        if (!openReply || openReply[2] !== 0x00) {
-          throw new Error("Failed to open file on NXT");
-        }
-
-        const handle = openReply[3];
-        const chunkSize = 32;
-
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.slice(i, Math.min(i + chunkSize, bytes.length));
-          const writeCmd = [handle, ...Array.from(chunk)];
-          await this.peripheral.sendTelegram(
-            NXT_OPCODE.WRITE,
-            writeCmd,
-            true,
-            true,
-          );
-          await this.peripheral.sleep(20);
-
-          if (i % 320 === 0) {
-            logger.log(`Upload: ${Math.round((i / bytes.length) * 100)}%`);
-          }
-        }
-
-        await this.peripheral.sendTelegram(
-          NXT_OPCODE.CLOSE,
-          [handle],
-          true,
-          true,
-        );
-
-        logger.success("✅ Upload complete!");
-        logger.log("=".repeat(60));
-        logger.success("🎉 WORKFLOW COMPLETE!");
-        logger.log("=".repeat(60));
-
-        alert(
-          `🎉 SUCCESS!\n\n✅ Transpiled\n✅ Compiled\n✅ Uploaded\n\nFile: ${filename}\nSize: ${bytes.length} bytes\n\nRun "${filename}" from the NXT menu!`,
-        );
       } catch (error) {
         logger.error("Workflow failed:", error);
-        alert(
-          `❌ Workflow failed:\n\n${error.message}\n\nCheck console for details.`,
-        );
+        alert(`❌ Workflow failed:\n\n${error.message}`);
       }
     }
   }
